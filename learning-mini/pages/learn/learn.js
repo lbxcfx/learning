@@ -15,6 +15,12 @@ const YS_CONFIG = {
     WS_URL: "wss://wss-edu.hivoice.cn:443/ws/eval/"
 };
 
+const AUDIO_EFFECTS = {
+    CORRECT: '/audio/correct.wav',
+    INCORRECT: '/audio/incorrect.wav',
+    FINISH: '/audio/finish.mp3'
+};
+
 function generateGuid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
         var r = (Math.random() * 16) | 0,
@@ -321,6 +327,14 @@ Page({
         }
     },
 
+    playLocalSound(path) {
+        const ctx = wx.createInnerAudioContext();
+        ctx.src = path;
+        ctx.onError((e) => console.error('Local Sound Error:', e));
+        ctx.onEnded(() => ctx.destroy());
+        ctx.play();
+    },
+
     playSentenceSound() {
         if (this.data.currentSentence) {
             this.playAudioText(this.data.currentSentence.english);
@@ -345,6 +359,10 @@ Page({
 
             this.showFeedback(true, '🎉 太棒了！', learningData.encouragements[Math.floor(Math.random() * learningData.encouragements.length)]);
         } else {
+            // Add to mistakes
+            if (this.data.currentWord) {
+                app.addMistake(this.data.currentWord);
+            }
             this.showFeedback(false, '💪 再接再厉', learningData.errorMessages[Math.floor(Math.random() * learningData.errorMessages.length)]);
         }
 
@@ -387,6 +405,8 @@ Page({
 
             this.showFeedback(true, '🎉 完全正确！', '句子排序成功！');
         } else {
+            // 句子排序较难直接定义“错词”，但可以作为一种错误记录，暂时不加入错题本，或者加入整个句子？
+            // 用户需求主要是“错题本”，通常指单词。这里暂不处理句子。
             this.showFeedback(false, '💪 再想想', '顺序好像不太对哦~');
         }
 
@@ -407,6 +427,7 @@ Page({
         } else {
             // 完成学习
             app.addCoins(20);
+            this.playLocalSound(AUDIO_EFFECTS.FINISH);
             wx.showModal({
                 title: '🎉 学习完成！',
                 content: `获得20金币！\n本次得分：${this.data.score}`,
@@ -419,6 +440,7 @@ Page({
     },
 
     showFeedback(success, title, message) {
+        this.playLocalSound(success ? AUDIO_EFFECTS.CORRECT : AUDIO_EFFECTS.INCORRECT);
         this.setData({
             feedback: {
                 show: true,
@@ -488,6 +510,13 @@ Page({
             this.showFeedback(true, '🎉 正确！', '填空成功');
             app.addScore(15);
         } else {
+            // Add to mistakes
+            // 构造一个简单的单词对象
+            app.addMistake({
+                english: this.data.fillAnswer,
+                chinese: '填空题', // 既然只有答案，上下文在句子中
+                soundmark: ''
+            });
             this.showFeedback(false, '💪 错误', '正确答案: ' + this.data.fillAnswer);
         }
 
@@ -577,6 +606,10 @@ Page({
             app.addScore(5);
             this.showFeedback(true, '⚡ +5', '回答正确');
         } else {
+            // Add to mistakes (challenge mode)
+            if (this.data.challenge.currentQuestion && this.data.challenge.currentQuestion.data) {
+                app.addMistake(this.data.challenge.currentQuestion.data);
+            }
             this.showFeedback(false, '❌ 错误', '继续加油');
         }
 
@@ -619,13 +652,19 @@ Page({
 
     // ==================== Oral Practice Mode ====================
 
-    toggleRecord() {
+    startRecordHandler() {
+        if (this.data.oral.status !== 'IDLE') return;
+        this.stopRequested = false;
+        this.startRecord();
+    },
+
+    stopRecordHandler() {
+        this.stopRequested = true;
         const { status } = this.data.oral;
-        if (status === 'IDLE') {
-            this.startRecord();
-        } else if (status === 'RECORDING') {
+        if (status === 'RECORDING') {
             this.stopRecord();
         }
+        // If CONNECTING, the stopRequested flag will handle it in onOpen or onStart
     },
 
     startRecord() {
@@ -639,6 +678,13 @@ Page({
         });
 
         this.socketTask.onOpen(() => {
+            if (this.stopRequested) {
+                console.log('User released before connection opened - cancelling');
+                this.socketTask.close();
+                this.setData({ 'oral.status': 'IDLE' });
+                return;
+            }
+
             console.log('Socket connected');
             this.sid = generateGuid();
 
@@ -677,6 +723,11 @@ Page({
         recorderManager.onStart(() => {
             console.log('Recorder started');
             this.setData({ 'oral.status': 'RECORDING' });
+
+            if (this.stopRequested) {
+                console.log('Stop requested during init - stopping immediately');
+                this.stopRecord();
+            }
         });
 
         recorderManager.onFrameRecorded((res) => {

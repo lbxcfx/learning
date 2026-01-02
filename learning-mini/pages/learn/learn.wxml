@@ -98,14 +98,16 @@
     
     <view class="oral-section" style="margin-top: 60rpx; display: flex; flex-direction: column; align-items: center;">
         <view class="oral-status" style="margin-bottom: 30rpx; color: #6b7280; font-size: 28rpx;">
-            <text wx:if="{{oral.status === 'IDLE'}}">点击下方麦克风开始录音</text>
+            <text wx:if="{{oral.status === 'IDLE'}}">按住麦克风开始录音</text>
             <text wx:if="{{oral.status === 'CONNECTING'}}">正在连接...</text>
-            <text wx:if="{{oral.status === 'RECORDING'}}">正在录音... 点击停止</text>
+            <text wx:if="{{oral.status === 'RECORDING'}}">松开结束录音</text>
             <text wx:if="{{oral.status === 'EVALUATING'}}">正在评测...</text>
         </view>
         
         <view class="record-btn {{oral.status === 'RECORDING' ? 'recording' : ''}}" 
-              bindtap="toggleRecord"
+              catchtouchstart="startRecordHandler"
+              catchtouchend="stopRecordHandler"
+              catchtouchcancel="stopRecordHandler"
               style="width: 140rpx; height: 140rpx; border-radius: 50%; background: #10b981; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3); transition: all 0.3s ease; position: relative;">
             <text style="font-size: 60rpx;">🎤</text>
             <view class="ripple" wx:if="{{oral.status === 'RECORDING'}}" 

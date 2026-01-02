@@ -3,7 +3,9 @@
         "pages/index/index",
         "pages/learn/learn",
         "pages/rank/rank",
-        "pages/profile/profile"
+        "pages/profile/profile",
+        "pages/mistakes/mistakes",
+        "pages/stats/stats"
     ],
     "window": {
         "backgroundTextStyle": "light",

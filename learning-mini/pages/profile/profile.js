@@ -88,35 +88,98 @@ Page({
             return;
         }
 
-        const userInfo = {
-            avatarUrl: this.data.tempAvatarUrl,
-            nickName: this.data.tempNickname
+        wx.showLoading({ title: '正在登录...' });
+
+        const handleLoginSuccess = (permanentAvatarUrl) => {
+            const userInfo = {
+                avatarUrl: permanentAvatarUrl,
+                nickName: this.data.tempNickname
+            };
+
+            console.log('Submitting login with:', userInfo);
+
+            // 获取登录凭证 code
+            wx.login({
+                success: res => {
+                    const code = res.code;
+                    console.log('Login successful, code:', code);
+                    // 这里可以发送 code 到后台
+                }
+            });
+
+            // 更新全局状态
+            app.globalData.userInfo = userInfo;
+            app.globalData.isLoggedIn = true;
+
+            // 持久化存储
+            wx.setStorageSync('userInfo', userInfo);
+
+            // 保存并同步到云端
+            app.saveLearningData();
+
+            this.setData({
+                userInfo,
+                tempAvatarUrl: '',
+                tempNickname: ''
+            });
+
+            wx.hideLoading();
+            wx.showToast({
+                title: '登录成功',
+                icon: 'success'
+            });
         };
 
-        console.log('Submitting login with:', userInfo);
+        // 处理头像持久化 (如果是临时路径)
+        const avatarUrl = this.data.tempAvatarUrl;
+        const isTempFile = avatarUrl.includes('tmp') || avatarUrl.startsWith('wxfile');
 
-        // 获取登录凭证 code
-        wx.login({
-            success: res => {
-                const code = res.code;
-                console.log('Login successful, code:', code);
-                // 这里可以发送 code 到后台
+        if (isTempFile) {
+            if (wx.cloud) {
+                // 有云开发：上传到云存储
+                const cloudPath = 'avatars/' + Date.now() + '-' + Math.floor(Math.random() * 1000) + (avatarUrl.match(/\.[^.]+?$/)?.[0] || '.jpg');
+
+                wx.cloud.uploadFile({
+                    cloudPath: cloudPath,
+                    filePath: avatarUrl,
+                    success: res => {
+                        console.log('✅ Upload success:', res.fileID);
+                        handleLoginSuccess(res.fileID);
+                    },
+                    fail: err => {
+                        console.error('❌ Upload failed:', err);
+                        // 上传失败尝试降级为本地保存
+                        this.saveAvatarLocally(avatarUrl, handleLoginSuccess);
+                    }
+                });
+            } else {
+                // 无云开发：保存到本地文件系统
+                this.saveAvatarLocally(avatarUrl, handleLoginSuccess);
             }
-        });
+        } else {
+            // 已经是永久路径 (如 cloud:// 或 http://)
+            handleLoginSuccess(avatarUrl);
+        }
+    },
 
-        app.globalData.userInfo = userInfo;
-        app.globalData.isLoggedIn = true;
-        wx.setStorageSync('userInfo', userInfo);
-
-        this.setData({
-            userInfo,
-            tempAvatarUrl: '',
-            tempNickname: ''
-        });
-
-        wx.showToast({
-            title: '登录成功',
-            icon: 'success'
+    // 辅助方法：保存图片到本地
+    saveAvatarLocally(tempFilePath, callback) {
+        wx.getFileSystemManager().saveFile({
+            tempFilePath: tempFilePath,
+            success: res => {
+                console.log('✅ Saved locally:', res.savedFilePath);
+                callback(res.savedFilePath);
+            },
+            fail: err => {
+                console.error('❌ Save local failed:', err);
+                wx.hideLoading();
+                wx.showToast({
+                    title: '保存头像失败',
+                    icon: 'none'
+                });
+                // 极端情况：直接使用临时路径（下次启动可能会挂）
+                callback(tempFilePath);
+            }
         });
     },
 
@@ -144,14 +207,16 @@ Page({
     goToPage(e) {
         const page = e.currentTarget.dataset.page;
 
-        wx.showToast({
-            title: '功能开发中',
-            icon: 'none'
-        });
+        if (page === 'settings' || page === 'about') {
+            wx.showToast({
+                title: '功能开发中',
+                icon: 'none'
+            });
+            return;
+        }
 
-        // TODO: 跳转到对应页面
-        // wx.navigateTo({
-        //   url: `/pages/${page}/${page}`
-        // });
+        wx.navigateTo({
+            url: `/pages/${page}/${page}`
+        });
     }
 });

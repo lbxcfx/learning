@@ -37,6 +37,7 @@
   "libVersion": "3.13.1",
   "appid": "wx7bb0079f30137a3e",
   "projectname": "learning-mini",
+  "cloudfunctionRoot": "cloudfunctions/",
   "condition": {},
   "description": "五年级英语学习乐园小程序",
   "packOptions": {

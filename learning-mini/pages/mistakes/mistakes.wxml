@@ -1,0 +1,27 @@
+<view class="container">
+  <view class="header">
+    <text class="title">我的错题本 📝</text>
+    <text class="subtitle" wx:if="{{mistakes.length > 0}}">共 {{mistakes.length}} 个生词需要复习</text>
+    <text class="subtitle" wx:else>太棒了，没有错题！🎉</text>
+  </view>
+
+  <view class="mistakes-list" wx:if="{{mistakes.length > 0}}">
+    <view class="mistake-item" wx:for="{{mistakes}}" wx:key="uniqueId">
+      <view class="word-info">
+        <text class="english">{{item.english}}</text>
+        <text class="soundmark">{{item.soundmark}}</text>
+        <text class="chinese">{{item.chinese}}</text>
+      </view>
+      <view class="actions">
+        <button class="icon-btn" bindtap="playSound" data-word="{{item.english}}">🔊</button>
+        <button class="icon-btn delete" bindtap="removeMistake" data-index="{{index}}">🗑️</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="empty-state" wx:else>
+    <text class="empty-icon">✨</text>
+    <text class="empty-text">继续保持，去学习新单词吧！</text>
+    <button class="btn-primary" bindtap="goLearn">去学习</button>
+  </view>
+</view>
