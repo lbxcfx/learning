@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="五年级英语学习乐园 - 趣味英语学习，轻松掌握核心词汇和句型">
+  <title>🌈 五年级英语学习乐园</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌈</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <span class="logo-icon">🌈</span>
+          <span class="logo-text">五年级英语学习乐园</span>
+        </div>
+        <div class="stats-bar">
+          <div class="stat-item" id="coinDisplay">
+            <span class="stat-icon">🪙</span>
+            <span class="stat-value" id="coinValue">0</span>
+          </div>
+          <div class="stat-item" id="scoreDisplay">
+            <span class="stat-icon">⭐</span>
+            <span class="stat-value" id="scoreValue">0</span>
+          </div>
+          <div class="stat-item" id="streakDisplay">
+            <span class="stat-icon">🔥</span>
+            <span class="stat-value" id="streakValue">0</span>
+          </div>
+          <div class="stat-item stats-btn" onclick="showStatsPanel()">
+            <span class="stat-icon">📊</span>
+            <span>统计</span>
+          </div>
+          <div class="stat-item mistake-book-btn" onclick="showMistakeBook()">
+            <span class="stat-icon">📕</span>
+            <span>错题本</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Unit Navigation -->
+    <nav class="unit-nav" id="unitNav">
+      <!-- Units will be rendered by JS -->
+    </nav>
+
+    <!-- Unit Info Banner -->
+    <div class="unit-info-banner" id="unitInfoBanner">
+      <div class="unit-banner-content">
+        <img src="" alt="" class="unit-banner-image" id="unitBannerImage">
+        <div class="unit-banner-text">
+          <h2 class="unit-banner-title" id="unitBannerTitle">Unit 1: Eat Healthily</h2>
+          <p class="unit-banner-subtitle" id="unitBannerSubtitle">健康饮食</p>
+          <p class="unit-banner-stats" id="unitBannerStats">📚 10个单词 · 📝 5个句子</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode Selection (shown when a unit is selected) -->
+    <div class="mode-grid" id="modeGrid">
+      <div class="mode-card" onclick="startMode('vocab')" style="--mode-color: #6366f1; --mode-color-light: #818cf8;">
+        <span class="mode-icon">📖</span>
+        <div class="mode-title">单词卡片</div>
+        <div class="mode-desc">翻卡学习核心词汇</div>
+      </div>
+      <div class="mode-card" onclick="startMode('match')" style="--mode-color: #f59e0b; --mode-color-light: #fbbf24;">
+        <span class="mode-icon">🖼️</span>
+        <div class="mode-title">看图选词</div>
+        <div class="mode-desc">看图片选择正确单词</div>
+      </div>
+      <div class="mode-card" onclick="startMode('spelling')" style="--mode-color: #10b981; --mode-color-light: #34d399;">
+        <span class="mode-icon">✍️</span>
+        <div class="mode-title">拼写练习</div>
+        <div class="mode-desc">看中文拼写英文单词</div>
+      </div>
+      <div class="mode-card" onclick="startMode('sentence')" style="--mode-color: #8b5cf6; --mode-color-light: #a78bfa;">
+        <span class="mode-icon">🔀</span>
+        <div class="mode-title">句子排序</div>
+        <div class="mode-desc">将打乱的单词排成句子</div>
+      </div>
+      <div class="mode-card" onclick="startMode('fill')" style="--mode-color: #ec4899; --mode-color-light: #f472b6;">
+        <span class="mode-icon">📝</span>
+        <div class="mode-title">填空选择</div>
+        <div class="mode-desc">选词填空完成句子</div>
+      </div>
+      <div class="mode-card" onclick="startMode('dialogue')" style="--mode-color: #3b82f6; --mode-color-light: #60a5fa;">
+        <span class="mode-icon">🎯</span>
+        <div class="mode-title">情景对话</div>
+        <div class="mode-desc">选择正确的回应</div>
+      </div>
+      <div class="mode-card challenge-mode" onclick="startMode('challenge')" style="--mode-color: #ef4444; --mode-color-light: #f87171;">
+        <span class="mode-icon">⏱️</span>
+        <div class="mode-title">限时挑战</div>
+        <div class="mode-desc">60秒内答对更多题目</div>
+        <div class="challenge-badge">🔥 挑战</div>
+      </div>
+    </div>
+
+    <!-- Game Area -->
+    <div class="game-area hidden" id="gameArea">
+      <button class="back-btn" onclick="exitGame()">
+        <span>←</span>
+        <span>返回选择</span>
+      </button>
+      
+      <div class="game-header">
+        <div class="game-title" id="gameTitle">
+          <span id="gameTitleIcon">📖</span>
+          <span id="gameTitleText">单词卡片</span>
+        </div>
+        <div class="progress-wrapper">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+          </div>
+          <span class="progress-text" id="progressText">0/10</span>
+        </div>
+      </div>
+
+      <div class="game-content" id="gameContent">
+        <!-- Game content will be rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Mistake Book Modal -->
+    <div class="feedback-overlay" id="mistakeBookOverlay">
+      <div class="feedback-modal" style="max-width: 600px;">
+        <h2 style="margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <span>📕</span> 错题本
+        </h2>
+        <div class="mistakes-container" id="mistakesList">
+          <!-- Mistakes will be rendered by JS -->
+        </div>
+        <button class="nav-btn" style="margin-top: 20px;" onclick="closeMistakeBook()">关闭</button>
+      </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="feedback-overlay" id="feedbackOverlay">
+      <div class="feedback-modal">
+        <div class="feedback-icon" id="feedbackIcon">🎉</div>
+        <div class="feedback-title" id="feedbackTitle">太棒了！</div>
+        <div class="feedback-message" id="feedbackMessage">回答正确！</div>
+        <div class="coin-reward hidden" id="coinReward">
+          <span>🪙</span>
+          <span id="coinRewardValue">+10</span>
+        </div>
+        <button class="nav-btn" onclick="closeFeedback()">继续</button>
+      </div>
+    </div>
+
+    <!-- Confetti Container -->
+    <div class="confetti hidden" id="confettiContainer"></div>
+
+    <!-- Statistics Panel Modal -->
+    <div class="feedback-overlay" id="statsPanelOverlay">
+      <div class="stats-panel-modal">
+        <div class="stats-panel-header">
+          <h2>📊 学习统计</h2>
+          <button class="close-btn" onclick="closeStatsPanel()">×</button>
+        </div>
+        <div class="stats-panel-content">
+          <!-- Overview Stats -->
+          <div class="stats-overview">
+            <div class="stats-overview-item">
+              <div class="stats-overview-icon">📚</div>
+              <div class="stats-overview-value" id="statsTotalWords">0</div>
+              <div class="stats-overview-label">已学单词</div>
+            </div>
+            <div class="stats-overview-item">
+              <div class="stats-overview-icon">✅</div>
+              <div class="stats-overview-value" id="statsCorrectRate">0%</div>
+              <div class="stats-overview-label">正确率</div>
+            </div>
+            <div class="stats-overview-item">
+              <div class="stats-overview-icon">🔥</div>
+              <div class="stats-overview-value" id="statsMaxStreak">0</div>
+              <div class="stats-overview-label">最长连击</div>
+            </div>
+            <div class="stats-overview-item">
+              <div class="stats-overview-icon">⏱️</div>
+              <div class="stats-overview-value" id="statsStudyTime">0分钟</div>
+              <div class="stats-overview-label">学习时长</div>
+            </div>
+          </div>
+
+          <!-- Weekly Chart -->
+          <div class="stats-section">
+            <h3>📅 本周学习</h3>
+            <div class="weekly-chart" id="weeklyChart">
+              <div class="chart-bar" style="--bar-height: 30%"><span>一</span></div>
+              <div class="chart-bar" style="--bar-height: 60%"><span>二</span></div>
+              <div class="chart-bar" style="--bar-height: 45%"><span>三</span></div>
+              <div class="chart-bar" style="--bar-height: 80%"><span>四</span></div>
+              <div class="chart-bar" style="--bar-height: 55%"><span>五</span></div>
+              <div class="chart-bar active" style="--bar-height: 100%"><span>六</span></div>
+              <div class="chart-bar" style="--bar-height: 20%"><span>日</span></div>
+            </div>
+          </div>
+
+          <!-- Unit Progress -->
+          <div class="stats-section">
+            <h3>📖 单元进度</h3>
+            <div class="unit-progress-list" id="unitProgressList">
+              <!-- Progress items will be rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="stats-actions">
+            <button class="nav-btn secondary" onclick="exportLearningRecord()">📥 导出记录</button>
+            <button class="nav-btn" onclick="closeStatsPanel()">关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
