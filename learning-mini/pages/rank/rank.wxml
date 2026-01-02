@@ -1,0 +1,48 @@
+<!--pages/rank/rank.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">🏆 学习排行榜</text>
+    <text class="subtitle">看看谁学得最棒！</text>
+  </view>
+  
+  <!-- 当前用户排名 -->
+  <view class="my-rank card" wx:if="{{userInfo}}">
+    <view class="rank-badge my">{{myRank}}</view>
+    <image class="rank-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+    <view class="rank-info">
+      <text class="rank-name">{{userInfo.nickName}}</text>
+      <text class="rank-score">⭐ {{myScore}} 分</text>
+    </view>
+    <text class="rank-highlight">我的排名</text>
+  </view>
+  
+  <!-- 排行榜列表 -->
+  <view class="rank-list">
+    <view 
+      class="rank-item {{index < 3 ? 'top' + (index + 1) : ''}}"
+      wx:for="{{rankList}}"
+      wx:key="id"
+    >
+      <view class="rank-badge {{index < 3 ? 'medal' : ''}}">
+        <text wx:if="{{index === 0}}">🥇</text>
+        <text wx:elif="{{index === 1}}">🥈</text>
+        <text wx:elif="{{index === 2}}">🥉</text>
+        <text wx:else>{{index + 1}}</text>
+      </view>
+      <image class="rank-avatar" src="{{item.avatar}}" mode="aspectFill"></image>
+      <view class="rank-info">
+        <text class="rank-name">{{item.name}}</text>
+        <view class="rank-stats">
+          <text class="rank-score">⭐ {{item.score}}</text>
+          <text class="rank-days">📅 {{item.days}}天</text>
+        </view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 未登录提示 -->
+  <view class="login-prompt card" wx:if="{{!userInfo}}">
+    <text class="prompt-text">登录后查看完整排行榜</text>
+    <button class="btn-primary" bindtap="goLogin">去登录</button>
+  </view>
+</view>

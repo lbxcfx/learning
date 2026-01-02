@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>讯飞语音评测API测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-success {
+            background: #22c55e;
+            color: white;
+        }
+
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .status-idle {
+            background: #e5e7eb;
+        }
+
+        .status-connecting {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-recording {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        #log {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-error {
+            color: #f87171;
+        }
+
+        .log-success {
+            color: #4ade80;
+        }
+
+        .log-info {
+            color: #60a5fa;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            width: 200px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎤 讯飞语音评测API测试</h1>
+
+        <div class="test-section">
+            <h3>测试配置</h3>
+            <p>测试单词: <input type="text" id="testWord" value="hello" /></p>
+            <p>API配置状态: <span id="configStatus">检查中...</span></p>
+        </div>
+
+        <div class="test-section">
+            <h3>测试步骤</h3>
+            <button class="btn-primary" onclick="testWebSocketConnection()">1. 测试WebSocket连接</button>
+            <button class="btn-success" onclick="startRecordingTest()">2. 开始录音测试</button>
+            <button class="btn-danger" onclick="stopRecordingTest()">3. 停止录音</button>
+        </div>
+
+        <div id="status" class="status-idle">状态: 等待测试</div>
+
+        <div class="test-section">
+            <h3>测试日志</h3>
+            <div id="log"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>评测结果</h3>
+            <div id="result">等待评测...</div>
+        </div>
+    </div>
+
+    <script src="libs/crypto-js.js"></script>
+    <script src="libs/fast-xml-parser.min.js"></script>
+    <script src="libs/recorder.umd.js"></script>
+
+    <script>
+        // API配置
+        const ISE_CONFIG = {
+            APPID: "47698168",
+            API_KEY: "a257644efdfcf97d7446575853cc0b15",
+            API_SECRET: "MzMzNmNjZWIzZDYxY2FiM2ZhMjg1Mjhh"
+        };
+
+        let recorder = null;
+        let iseWS = null;
+
+        // 日志函数
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = `log-${type}`;
+            logEl.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        function setStatus(message, type = 'idle') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = `状态: ${message}`;
+            statusEl.className = `status-${type}`;
+        }
+
+        // 检查配置
+        function checkConfig() {
+            const configEl = document.getElementById('configStatus');
+            if (ISE_CONFIG.APPID && ISE_CONFIG.API_KEY && ISE_CONFIG.API_SECRET) {
+                configEl.innerHTML = `<span style="color: green;">✓ 已配置 (APPID: ${ISE_CONFIG.APPID})</span>`;
+                log(`API配置已加载: APPID=${ISE_CONFIG.APPID}`, 'success');
+            } else {
+                configEl.innerHTML = '<span style="color: red;">✗ 未配置</span>';
+                log('API配置缺失!', 'error');
+            }
+        }
+
+        // 生成WebSocket URL
+        function getISEWebSocketUrl() {
+            const url = "wss://ise-api.xfyun.cn/v2/open-ise";
+            const host = "ise-api.xfyun.cn";
+            const apiKey = ISE_CONFIG.API_KEY;
+            const apiSecret = ISE_CONFIG.API_SECRET;
+            const date = new Date().toGMTString();
+            const algorithm = "hmac-sha256";
+            const headers = "host date request-line";
+            const signatureOrigin = `host: ${host}\ndate: ${date}\nGET /v2/open-ise HTTP/1.1`;
+
+            log(`签名原文: ${signatureOrigin.replace(/\n/g, '\\n')}`, 'info');
+
+            const signatureSha = CryptoJS.HmacSHA256(signatureOrigin, apiSecret);
+            const signature = CryptoJS.enc.Base64.stringify(signatureSha);
+
+            log(`签名结果: ${signature}`, 'info');
+
+            const authorizationOrigin = `api_key="${apiKey}", algorithm="${algorithm}", headers="${headers}", signature="${signature}"`;
+            const authorization = btoa(authorizationOrigin);
+
+            const finalUrl = `${url}?authorization=${authorization}&date=${encodeURIComponent(date)}&host=${host}`;
+            log(`WebSocket URL生成成功`, 'success');
+
+            return finalUrl;
+        }
+
+        // Base64编码
+        function toBase64(buffer) {
+            let binary = "";
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        // 测试WebSocket连接
+        function testWebSocketConnection() {
+            log('=== 开始WebSocket连接测试 ===', 'info');
+            setStatus('正在连接WebSocket...', 'connecting');
+
+            try {
+                const wsUrl = getISEWebSocketUrl();
+                log(`连接地址: ${wsUrl.substring(0, 100)}...`, 'info');
+
+                const testWS = new WebSocket(wsUrl);
+
+                testWS.onopen = () => {
+                    log('WebSocket连接成功!', 'success');
+                    setStatus('WebSocket连接成功', 'success');
+
+                    // 发送测试参数
+                    const testWord = document.getElementById('testWord').value || 'hello';
+                    const params = {
+                        common: {
+                            app_id: ISE_CONFIG.APPID,
+                        },
+                        business: {
+                            category: "read_word",
+                            rstcd: "utf8",
+                            group: "pupil",
+                            sub: "ise",
+                            tte: "utf-8",
+                            cmd: "ssb",
+                            auf: "audio/L16;rate=16000",
+                            ent: "en_vip",
+                            aus: 1,
+                            aue: "raw",
+                            text: "\uFEFF" + testWord,
+                        },
+                        data: {
+                            status: 0,
+                        },
+                    };
+
+                    log(`发送初始参数: ${JSON.stringify(params)}`, 'info');
+                    testWS.send(JSON.stringify(params));
+                };
+
+                testWS.onmessage = (e) => {
+                    log(`收到消息: ${e.data}`, 'success');
+                    try {
+                        const jsonData = JSON.parse(e.data);
+                        if (jsonData.code !== 0) {
+                            log(`API错误: code=${jsonData.code}, message=${jsonData.message}`, 'error');
+                            setStatus(`API错误: ${jsonData.message}`, 'error');
+                        } else {
+                            log(`API响应正常: code=${jsonData.code}`, 'success');
+                        }
+                    } catch (err) {
+                        log(`解析响应失败: ${err.message}`, 'error');
+                    }
+                };
+
+                testWS.onerror = (e) => {
+                    log(`WebSocket错误: ${JSON.stringify(e)}`, 'error');
+                    setStatus('WebSocket连接错误', 'error');
+                };
+
+                testWS.onclose = (e) => {
+                    log(`WebSocket关闭: code=${e.code}, reason=${e.reason}`, 'info');
+                };
+
+            } catch (err) {
+                log(`测试失败: ${err.message}`, 'error');
+                setStatus('测试失败', 'error');
+            }
+        }
+
+        // 开始录音测试
+        function startRecordingTest() {
+            log('=== 开始录音测试 ===', 'info');
+            setStatus('正在初始化录音...', 'connecting');
+
+            try {
+                // 初始化录音器
+                if (!recorder) {
+                    log('初始化RecorderManager...', 'info');
+                    recorder = new RecorderManager("libs");
+                    recorder.onStart = () => {
+                        log('录音已开始', 'success');
+                        setStatus('正在录音...', 'recording');
+                    };
+                    recorder.onStop = () => {
+                        log('录音已停止', 'info');
+                    };
+                }
+
+                const testWord = document.getElementById('testWord').value || 'hello';
+                log(`测试单词: ${testWord}`, 'info');
+
+                // 连接WebSocket
+                const wsUrl = getISEWebSocketUrl();
+                iseWS = new WebSocket(wsUrl);
+
+                iseWS.onopen = () => {
+                    log('WebSocket已连接，开始录音...', 'success');
+
+                    // 开始录音
+                    recorder.start({
+                        sampleRate: 16000,
+                        frameSize: 1280,
+                    });
+
+                    // 发送初始参数
+                    const params = {
+                        common: {
+                            app_id: ISE_CONFIG.APPID,
+                        },
+                        business: {
+                            category: "read_word",
+                            rstcd: "utf8",
+                            group: "pupil",
+                            sub: "ise",
+                            tte: "utf-8",
+                            cmd: "ssb",
+                            auf: "audio/L16;rate=16000",
+                            ent: "en_vip",
+                            aus: 1,
+                            aue: "raw",
+                            text: "\uFEFF" + testWord,
+                        },
+                        data: {
+                            status: 0,
+                        },
+                    };
+
+                    iseWS.send(JSON.stringify(params));
+                    log('初始参数已发送', 'info');
+                };
+
+                iseWS.onmessage = (e) => {
+                    log(`收到消息: ${e.data.substring(0, 200)}...`, 'info');
+                    handleISEResult(e.data);
+                };
+
+                iseWS.onerror = (e) => {
+                    log(`WebSocket错误!`, 'error');
+                    setStatus('连接错误', 'error');
+                };
+
+                iseWS.onclose = (e) => {
+                    log(`WebSocket关闭`, 'info');
+                    if (recorder) {
+                        recorder.stop();
+                    }
+                };
+
+                // 设置音频帧回调
+                recorder.onFrameRecorded = ({ isLastFrame, frameBuffer }) => {
+                    if (iseWS && iseWS.readyState === WebSocket.OPEN) {
+                        const frameData = {
+                            business: {
+                                aue: "raw",
+                                cmd: "auw",
+                                aus: isLastFrame ? 4 : 2,
+                            },
+                            data: {
+                                status: isLastFrame ? 2 : 1,
+                                data: toBase64(frameBuffer),
+                                data_type: 1
+                            },
+                        };
+                        iseWS.send(JSON.stringify(frameData));
+                        log(`发送音频帧: ${frameBuffer.byteLength} bytes, isLast=${isLastFrame}`, 'info');
+                    }
+                };
+
+            } catch (err) {
+                log(`录音测试失败: ${err.message}`, 'error');
+                setStatus('录音测试失败', 'error');
+            }
+        }
+
+        // 停止录音
+        function stopRecordingTest() {
+            log('停止录音...', 'info');
+            if (recorder) {
+                recorder.stop();
+            }
+            setStatus('录音已停止，等待评测结果...', 'connecting');
+        }
+
+        // 处理ISE结果
+        function handleISEResult(resultData) {
+            try {
+                const jsonData = JSON.parse(resultData);
+
+                if (jsonData.code !== 0) {
+                    log(`API错误: code=${jsonData.code}, message=${jsonData.message}`, 'error');
+                    document.getElementById('result').innerHTML = `<span style="color: red;">错误: ${jsonData.message}</span>`;
+                    return;
+                }
+
+                if (jsonData.data && jsonData.data.data) {
+                    const data = window.atob(jsonData.data.data);
+                    log(`原始XML数据: ${data}`, 'info');
+
+                    const parser = new XMLParser({
+                        attributeNamePrefix: "",
+                        ignoreAttributes: false,
+                    });
+                    const grade = parser.parse(data);
+
+                    log(`解析结果: ${JSON.stringify(grade)}`, 'success');
+
+                    // 提取评分
+                    const readWord = grade?.xml_result?.read_word?.rec_paper?.read_chapter;
+                    if (readWord) {
+                        const totalScore = readWord.total_score || 0;
+                        const accuracyScore = readWord.accuracy_score || 0;
+                        const fluencyScore = readWord.fluency_score || 0;
+
+                        document.getElementById('result').innerHTML = `
+              <div style="padding: 15px; background: #d1fae5; border-radius: 8px;">
+                <h4 style="margin: 0 0 10px 0;">✓ 评测成功!</h4>
+                <p><strong>总分:</strong> ${totalScore}</p>
+                <p><strong>准确度:</strong> ${accuracyScore}</p>
+                <p><strong>流畅度:</strong> ${fluencyScore}</p>
+              </div>
+            `;
+                        setStatus('评测完成', 'success');
+                    }
+                }
+
+                if (jsonData.data && jsonData.data.status === 2) {
+                    log('评测结束', 'success');
+                    if (iseWS) {
+                        iseWS.close();
+                    }
+                }
+
+            } catch (err) {
+                log(`解析结果失败: ${err.message}`, 'error');
+            }
+        }
+
+        // 页面加载完成后检查配置
+        window.onload = () => {
+            checkConfig();
+            log('测试页面已加载', 'info');
+            log('请按顺序点击测试按钮', 'info');
+        };
+    </script>
+</body>
+
+</html>

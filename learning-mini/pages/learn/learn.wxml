@@ -1,0 +1,261 @@
+<!--pages/learn/learn.wxml-->
+<view class="container">
+  <!-- 顶部进度条 -->
+  <view class="progress-bar">
+    <view class="progress-fill" style="width: {{progress}}%"></view>
+  </view>
+  <view class="progress-info">
+    <text class="progress-text">{{currentIndex + 1}} / {{totalItems}}</text>
+    <text class="score-text">🪙 {{score}}</text>
+  </view>
+  
+  <!-- 单词卡片模式 -->
+  <view class="game-content" wx:if="{{mode === 'vocab'}}">
+    <view class="vocab-card {{isFlipped ? 'flipped' : ''}}" bindtap="flipCard">
+      <view class="card-front">
+        <text class="word-emoji">{{currentWord.emoji || '📝'}}</text>
+        <text class="word-english">{{currentWord.english}}</text>
+        <text class="word-soundmark">{{currentWord.soundmark}}</text>
+        <button class="sound-btn" catchtap="playSound">🔊 听发音</button>
+      </view>
+      <view class="card-back">
+        <text class="word-chinese">{{currentWord.chinese}}</text>
+        <text class="word-soundmark">{{currentWord.soundmark}}</text>
+        <text class="word-english-small">{{currentWord.english}}</text>
+      </view>
+    </view>
+    
+    <view class="bottom-section">
+      <text class="tip">👆 点击卡片翻转查看中文释义</text>
+      
+      <view class="nav-buttons">
+        <button class="nav-btn secondary" bindtap="prevItem" disabled="{{currentIndex === 0}}">← 上一个</button>
+        <button class="nav-btn primary" bindtap="nextItem">
+          {{currentIndex === totalItems - 1 ? '完成 ✓' : '下一个 →'}}
+        </button>
+      </view>
+      
+      <!-- 学习小贴士 -->
+      <view class="learning-tips">
+        <view class="tips-header">
+          <text class="tips-icon">💡</text>
+          <text class="tips-title">学习小贴士</text>
+        </view>
+        <text class="tips-content">反复朗读单词3遍，记忆更牢固哦！</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 看图选词模式 -->
+  <view class="game-content" wx:if="{{mode === 'match'}}">
+    <!-- 题目卡片 -->
+    <view class="match-card">
+      <view class="match-header">
+        <text class="match-label">看图识单词</text>
+      </view>
+      <text class="match-emoji">{{currentWord.emoji || '📝'}}</text>
+      <text class="match-chinese-hint">{{currentWord.chinese}}</text>
+      <button class="sound-btn-large" bindtap="playSound">🔊 听发音</button>
+    </view>
+    
+    <!-- 选项区域 -->
+    <view class="options-section">
+      <text class="options-label">选择正确的单词：</text>
+      <view class="options-grid">
+        <view 
+          class="option-card {{item.selected ? (item.correct ? 'correct' : 'wrong') : ''}}"
+          wx:for="{{options}}"
+          wx:key="english"
+          bindtap="selectOption"
+          data-index="{{index}}"
+        >
+          <text class="option-text">{{item.english}}</text>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 底部提示 -->
+    <view class="learning-tips match-tips">
+      <view class="tips-header">
+        <text class="tips-icon">💡</text>
+        <text class="tips-title">小技巧</text>
+      </view>
+      <text class="tips-content">看图联想，记忆更深刻！</text>
+    </view>
+  </view>
+
+  <!-- 口语练习模式 -->
+  <view class="game-content" wx:if="{{mode === 'oral'}}">
+    <view class="match-card">
+      <view class="match-header">
+        <text class="match-label">口语练习</text>
+      </view>
+      <text class="match-emoji">{{currentWord.emoji || '📝'}}</text>
+      <text class="match-chinese-hint">{{currentWord.chinese}}</text>
+      <text class="match-word-english" style="font-size: 48rpx; color: #4b5563; margin-top: 20rpx; font-weight: bold;">{{currentWord.english}}</text>
+      <button class="sound-btn-large" bindtap="playSound">🔊 听标准音</button>
+    </view>
+    
+    <view class="oral-section" style="margin-top: 60rpx; display: flex; flex-direction: column; align-items: center;">
+        <view class="oral-status" style="margin-bottom: 30rpx; color: #6b7280; font-size: 28rpx;">
+            <text wx:if="{{oral.status === 'IDLE'}}">点击下方麦克风开始录音</text>
+            <text wx:if="{{oral.status === 'CONNECTING'}}">正在连接...</text>
+            <text wx:if="{{oral.status === 'RECORDING'}}">正在录音... 点击停止</text>
+            <text wx:if="{{oral.status === 'EVALUATING'}}">正在评测...</text>
+        </view>
+        
+        <view class="record-btn {{oral.status === 'RECORDING' ? 'recording' : ''}}" 
+              bindtap="toggleRecord"
+              style="width: 140rpx; height: 140rpx; border-radius: 50%; background: #10b981; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3); transition: all 0.3s ease; position: relative;">
+            <text style="font-size: 60rpx;">🎤</text>
+            <view class="ripple" wx:if="{{oral.status === 'RECORDING'}}" 
+                  style="position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 4rpx solid #10b981; animation: ripple 1.5s infinite;"></view>
+        </view>
+
+        <view class="result-display" wx:if="{{oral.score > 0}}" style="margin-top: 40rpx;">
+            <text class="result-score" style="font-size: 36rpx; font-weight: bold; color: {{oral.isCorrect ? '#10b981' : '#ef4444'}};">得分: {{oral.score}}</text>
+        </view>
+    </view>
+  </view>
+  
+  <!-- 句子排序模式 -->
+  <view class="game-content" wx:if="{{mode === 'sentence'}}">
+    <!-- 题目区域 -->
+    <view class="sentence-card">
+      <view class="sentence-header">
+        <text class="sentence-label">🔀 句子排序</text>
+      </view>
+      <text class="sentence-chinese-main">{{currentSentence.chinese}}</text>
+      <button class="sound-btn-sentence" bindtap="playSentenceSound">🔊 听句子发音</button>
+    </view>
+    
+    <!-- 答案区域 -->
+    <view class="answer-section">
+      <text class="section-label">拼出英文句子：</text>
+      <view class="dropzone">
+        <text wx:if="{{placedWords.length === 0}}" class="placeholder">👆 点击下方单词组成句子</text>
+        <view 
+          class="placed-word"
+          wx:for="{{placedWords}}"
+          wx:key="index"
+          bindtap="removeWord"
+          data-index="{{index}}"
+        >
+          {{item}}
+        </view>
+      </view>
+    </view>
+    
+    <!-- 单词池 -->
+    <view class="pool-section">
+      <text class="section-label">可选单词：</text>
+      <view class="word-pool">
+        <view 
+          class="word-chip {{item.placed ? 'placed' : ''}}"
+          wx:for="{{shuffledWords}}"
+          wx:key="index"
+          bindtap="placeWord"
+          data-index="{{index}}"
+        >
+          {{item.word}}
+        </view>
+      </view>
+    </view>
+    
+    <button 
+      class="check-btn" 
+      bindtap="checkSentence" 
+      disabled="{{placedWords.length !== correctOrder.length}}"
+    >
+      ✅ 检查答案
+    </button>
+    
+    <!-- 底部提示 -->
+    <view class="learning-tips sentence-tips">
+      <view class="tips-header">
+        <text class="tips-icon">💡</text>
+        <text class="tips-title">语法小知识</text>
+      </view>
+      <text class="tips-content">注意英文句子的语序：主语+谓语+宾语</text>
+    </view>
+  </view>
+
+  <!-- 填空选择模式 -->
+  <view class="game-content" wx:if="{{mode === 'fill'}}">
+    <view class="fill-container">
+      <view class="sentence-chinese">{{currentSentence.chinese}}</view>
+      
+      <!-- 句子显示区域 (使用Flex布局解决空格和排版问题) -->
+      <view class="fill-sentence-wrapper">
+        <block wx:for="{{fillSentence}}" wx:key="index">
+          <!-- 填空项 -->
+          <view wx:if="{{index === fillBlankIndex}}" class="fill-blank-wrapper">
+            <text class="fill-blank {{fillDisplayWord !== '_____' ? 'filled' : ''}}">{{fillDisplayWord === '_____' ? '' : fillDisplayWord}}</text>
+            <view class="fill-line" wx:if="{{fillDisplayWord === '_____'}}"></view>
+          </view>
+          <!-- 普通单词 -->
+          <text wx:else class="fill-word">{{item}}</text>
+        </block>
+      </view>
+      
+      <view class="fill-options-container">
+        <text class="options-label">请选择正确的单词：</text>
+        <view class="fill-options">
+          <button 
+            class="fill-option {{item.selected ? (item.correct ? 'correct' : 'wrong') : ''}}"
+            wx:for="{{fillOptions}}"
+            wx:key="text"
+            bindtap="checkFillAnswer"
+            data-index="{{index}}"
+          >
+            {{item.text}}
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 限时挑战模式 -->
+  <view class="game-content" wx:if="{{mode === 'challenge'}}">
+    <view class="challenge-header">
+      <view class="timer-badge {{challenge.timer <= 10 ? 'urgent' : ''}}">
+        ⏱️ {{challenge.timer}}s
+      </view>
+      <view class="score-badge">
+        ✅ {{challenge.correctCount}} / {{challenge.totalCount}}
+      </view>
+    </view>
+
+    <!-- 复用看图选词UI (使用 correct 的样式类) -->
+    <view class="match-card challenge-card">
+      <view class="match-header">
+        <text class="match-label">限时挑战</text>
+      </view>
+      <text class="match-emoji">{{challenge.currentQuestion.data.emoji || '📝'}}</text>
+      <!-- 显示中文提示，增加友好度 -->
+      <text class="match-chinese-hint">{{challenge.currentQuestion.data.chinese}}</text>
+      
+      <view class="options-section">
+        <view class="options-grid">
+          <view 
+            class="option-card {{item.selected ? (item.correct ? 'correct' : 'wrong') : ''}}"
+            wx:for="{{options}}"
+            wx:key="english"
+            bindtap="checkChallengeAnswer"
+            data-index="{{index}}"
+          >
+            <text class="option-text">{{item.english}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+  <!-- 反馈弹窗 -->
+  <view class="feedback-overlay {{feedback.show ? 'show' : ''}}">
+    <view class="feedback-card {{feedback.success ? 'success' : 'error'}}">
+      <text class="feedback-icon">{{feedback.success ? '🎉' : '💪'}}</text>
+      <text class="feedback-title">{{feedback.title}}</text>
+      <text class="feedback-message">{{feedback.message}}</text>
+    </view>
+  </view>
+</view>

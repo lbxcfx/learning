@@ -1,0 +1,67 @@
+<!--pages/index/index.wxml-->
+<view class="container">
+  <!-- 用户信息卡片 -->
+  <view class="user-card card" wx:if="{{userInfo}}">
+    <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+    <view class="user-info">
+      <text class="nickname">{{userInfo.nickName}}</text>
+      <view class="stats-row">
+        <text class="stat">🪙 {{coins}}</text>
+        <text class="stat">⭐ {{score}}</text>
+        <text class="stat">🔥 {{streak}}</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 未登录状态 -->
+  <view class="login-card card" wx:else>
+    <text class="login-text">登录后可保存学习进度</text>
+    <button class="btn-primary" bindtap="handleLogin">
+      <text>微信登录</text>
+    </button>
+  </view>
+  
+  <!-- 单元选择 -->
+  <view class="section-title">选择单元</view>
+  <scroll-view class="unit-scroll" scroll-x="true">
+    <view class="unit-list">
+      <view 
+        class="unit-btn {{currentUnit === item.id ? 'active' : ''}}"
+        wx:for="{{units}}"
+        wx:key="id"
+        bindtap="selectUnit"
+        data-id="{{item.id}}"
+      >
+        <text class="unit-icon">{{item.icon}}</text>
+        <text class="unit-name">Unit {{item.id}}</text>
+      </view>
+    </view>
+  </scroll-view>
+  
+  <!-- 单元信息 -->
+  <view class="unit-info card" wx:if="{{currentUnitData}}">
+    <view class="unit-title">{{currentUnitData.title}}</view>
+    <view class="unit-subtitle">{{currentUnitData.titleCn}}</view>
+    <view class="unit-stats">
+      📚 {{currentUnitData.vocabulary.length}}个单词 · 
+      📝 {{currentUnitData.sentences.length}}个句型
+    </view>
+  </view>
+  
+  <!-- 学习模式 -->
+  <view class="section-title">选择模式</view>
+  <view class="mode-grid">
+    <view 
+      class="mode-card"
+      wx:for="{{modes}}"
+      wx:key="key"
+      bindtap="startMode"
+      data-mode="{{item.key}}"
+      style="--mode-color: {{item.color}}"
+    >
+      <text class="mode-icon">{{item.icon}}</text>
+      <text class="mode-title">{{item.title}}</text>
+      <text class="mode-desc">{{item.desc}}</text>
+    </view>
+  </view>
+</view>

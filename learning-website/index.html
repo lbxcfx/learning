@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="五年级英语学习乐园 - 趣味英语学习，轻松掌握核心词汇和句型">
   <title>🌈 五年级英语学习乐园</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌈</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌈</text></svg>">
 </head>
+
 <body>
   <div class="app-container">
     <!-- Header -->
@@ -71,12 +74,13 @@
         <div class="mode-title">看图选词</div>
         <div class="mode-desc">看图片选择正确单词</div>
       </div>
-      <div class="mode-card" onclick="startMode('spelling')" style="--mode-color: #10b981; --mode-color-light: #34d399;">
-        <span class="mode-icon">✍️</span>
-        <div class="mode-title">拼写练习</div>
-        <div class="mode-desc">看中文拼写英文单词</div>
+      <div class="mode-card" onclick="startMode('oral')" style="--mode-color: #10b981; --mode-color-light: #34d399;">
+        <span class="mode-icon">🎤</span>
+        <div class="mode-title">口语练习</div>
+        <div class="mode-desc">看中文说英文单词</div>
       </div>
-      <div class="mode-card" onclick="startMode('sentence')" style="--mode-color: #8b5cf6; --mode-color-light: #a78bfa;">
+      <div class="mode-card" onclick="startMode('sentence')"
+        style="--mode-color: #8b5cf6; --mode-color-light: #a78bfa;">
         <span class="mode-icon">🔀</span>
         <div class="mode-title">句子排序</div>
         <div class="mode-desc">将打乱的单词排成句子</div>
@@ -86,12 +90,14 @@
         <div class="mode-title">填空选择</div>
         <div class="mode-desc">选词填空完成句子</div>
       </div>
-      <div class="mode-card" onclick="startMode('dialogue')" style="--mode-color: #3b82f6; --mode-color-light: #60a5fa;">
+      <div class="mode-card" onclick="startMode('dialogue')"
+        style="--mode-color: #3b82f6; --mode-color-light: #60a5fa;">
         <span class="mode-icon">🎯</span>
         <div class="mode-title">情景对话</div>
         <div class="mode-desc">选择正确的回应</div>
       </div>
-      <div class="mode-card challenge-mode" onclick="startMode('challenge')" style="--mode-color: #ef4444; --mode-color-light: #f87171;">
+      <div class="mode-card challenge-mode" onclick="startMode('challenge')"
+        style="--mode-color: #ef4444; --mode-color-light: #f87171;">
         <span class="mode-icon">⏱️</span>
         <div class="mode-title">限时挑战</div>
         <div class="mode-desc">60秒内答对更多题目</div>
@@ -105,7 +111,7 @@
         <span>←</span>
         <span>返回选择</span>
       </button>
-      
+
       <div class="game-header">
         <div class="game-title" id="gameTitle">
           <span id="gameTitleIcon">📖</span>
@@ -218,7 +224,11 @@
     </div>
   </div>
 
+  <!-- Speech Recognition Libraries -->
+  <script src="libs/ys-recorder.js"></script>
+
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>

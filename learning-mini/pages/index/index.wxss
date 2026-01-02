@@ -1,0 +1,172 @@
+/* pages/index/index.wxss */
+
+/* 用户卡片 */
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.avatar {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  border: 4rpx solid var(--primary);
+}
+
+.user-info {
+  flex: 1;
+}
+
+.nickname {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stats-row {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 8rpx;
+}
+
+.stat {
+  font-size: 26rpx;
+  color: var(--text-secondary);
+}
+
+/* 登录卡片 */
+.login-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24rpx;
+  padding: 48rpx 30rpx;
+}
+
+.login-text {
+  color: var(--text-secondary);
+  font-size: 28rpx;
+}
+
+/* 单元选择 */
+.section-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 30rpx 0 20rpx;
+}
+
+.unit-scroll {
+  white-space: nowrap;
+  margin: 0 -30rpx;
+  padding: 0 30rpx;
+}
+
+.unit-list {
+  display: inline-flex;
+  gap: 20rpx;
+}
+
+.unit-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 24rpx 32rpx;
+  background: var(--bg-card);
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+  border: 3rpx solid transparent;
+  transition: all 0.3s;
+}
+
+.unit-btn.active {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(129, 140, 248, 0.1));
+}
+
+.unit-icon {
+  font-size: 48rpx;
+}
+
+.unit-name {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 单元信息 */
+.unit-info {
+  text-align: center;
+}
+
+.unit-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.unit-subtitle {
+  font-size: 28rpx;
+  color: var(--text-secondary);
+  margin-top: 8rpx;
+}
+
+.unit-stats {
+  font-size: 24rpx;
+  color: var(--text-muted);
+  margin-top: 16rpx;
+}
+
+/* 模式网格 */
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
+}
+
+.mode-card {
+  background: var(--bg-card);
+  border-radius: 24rpx;
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+  border: 3rpx solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.mode-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rpx;
+  background: var(--mode-color, var(--primary));
+}
+
+.mode-card:active {
+  transform: scale(0.98);
+  border-color: var(--mode-color, var(--primary));
+}
+
+.mode-icon {
+  font-size: 56rpx;
+}
+
+.mode-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mode-desc {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  text-align: center;
+}

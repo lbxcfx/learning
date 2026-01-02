@@ -45,12 +45,12 @@ function updateUnitBanner() {
   const title = document.getElementById('unitBannerTitle');
   const subtitle = document.getElementById('unitBannerSubtitle');
   const stats = document.getElementById('unitBannerStats');
-  
+
   if (unit && unit.banner) {
     image.src = unit.banner;
     image.alt = unit.title;
   }
-  
+
   title.textContent = `Unit ${unit.id}: ${unit.title}`;
   subtitle.textContent = unit.titleCn;
   stats.textContent = `📚 ${unit.vocabulary.length}个单词 · 📝 ${unit.sentences.length}个句型 · 🎯 ${unit.dialogues.length}个对话`;
@@ -104,9 +104,9 @@ function startMode(mode) {
   gameState.currentMode = mode;
   gameState.currentIndex = 0;
   gameState.isAnswered = false;
-  
+
   const unit = getCurrentUnit();
-  
+
   // 挑战模式特殊处理
   if (mode === 'challenge') {
     document.getElementById('gameTitleIcon').textContent = '⏱️';
@@ -117,12 +117,12 @@ function startMode(mode) {
     startChallengeMode();
     return;
   }
-  
+
   // 设置总数
   switch (mode) {
     case 'vocab':
     case 'match':
-    case 'spelling':
+    case 'oral':
       gameState.totalItems = unit.vocabulary.length;
       break;
     case 'sentence':
@@ -138,7 +138,7 @@ function startMode(mode) {
   const titles = {
     vocab: { icon: '📖', text: '单词卡片' },
     match: { icon: '🖼️', text: '看图选词' },
-    spelling: { icon: '✍️', text: '拼写练习' },
+    oral: { icon: '🎤', text: '口语练习' },
     sentence: { icon: '🔀', text: '句子排序' },
     fill: { icon: '📝', text: '填空选择' },
     dialogue: { icon: '🎯', text: '情景对话' }
@@ -163,7 +163,7 @@ function exitGame() {
     clearInterval(challengeState.timerInterval);
     challengeState.timerInterval = null;
   }
-  
+
   document.getElementById('modeGrid').classList.remove('hidden');
   document.getElementById('unitInfoBanner').classList.remove('hidden');
   document.getElementById('gameArea').classList.add('hidden');
@@ -173,13 +173,13 @@ function exitGame() {
 function nextQuestion() {
   gameState.currentIndex++;
   gameState.isAnswered = false;
-  
+
   if (gameState.currentIndex >= gameState.totalItems) {
     // 完成所有题目
     showCompletionFeedback();
     return;
   }
-  
+
   renderGameContent();
   updateProgress();
 }
@@ -187,7 +187,7 @@ function nextQuestion() {
 // ==================== 游戏内容渲染 ====================
 function renderGameContent() {
   const content = document.getElementById('gameContent');
-  
+
   switch (gameState.currentMode) {
     case 'vocab':
       renderVocabMode(content);
@@ -195,8 +195,8 @@ function renderGameContent() {
     case 'match':
       renderMatchMode(content);
       break;
-    case 'spelling':
-      renderSpellingMode(content);
+    case 'oral':
+      renderOralMode(content);
       break;
     case 'sentence':
       renderSentenceMode(content);
@@ -214,7 +214,7 @@ function renderGameContent() {
 function renderVocabMode(container) {
   const unit = getCurrentUnit();
   const word = unit.vocabulary[gameState.currentIndex];
-  
+
   container.innerHTML = `
     <div class="vocab-container">
       <div class="vocab-card" id="vocabCard" onclick="flipCard()">
@@ -245,7 +245,7 @@ function renderVocabMode(container) {
       </div>
     </div>
   `;
-  
+
   // 自动播放单词发音
   setTimeout(() => {
     playWordSound(word.english);
@@ -280,10 +280,10 @@ function nextVocab() {
 function renderMatchMode(container) {
   const unit = getCurrentUnit();
   const word = unit.vocabulary[gameState.currentIndex];
-  
+
   // 生成选项（包含正确答案和3个干扰项）
   const options = generateOptions(unit.vocabulary, word, 4);
-  
+
   container.innerHTML = `
     <div class="match-container">
       <div class="match-image-wrapper">
@@ -299,7 +299,7 @@ function renderMatchMode(container) {
       </div>
     </div>
   `;
-  
+
   // 自动播放单词发音
   setTimeout(() => {
     playWordSound(word.english);
@@ -309,10 +309,10 @@ function renderMatchMode(container) {
 function checkMatchAnswer(selected, correct, element) {
   if (gameState.isAnswered) return;
   gameState.isAnswered = true;
-  
+
   const unit = getCurrentUnit();
   const word = unit.vocabulary.find(w => w.english === correct);
-  
+
   if (selected === correct) {
     element.classList.add('correct');
     handleCorrectAnswer(word);
@@ -326,144 +326,331 @@ function checkMatchAnswer(selected, correct, element) {
     });
     handleWrongAnswer(word);
   }
-  
+
   setTimeout(() => nextQuestion(), 1500);
 }
 
 function generateOptions(vocabulary, correctWord, count) {
   const options = [correctWord];
   const others = vocabulary.filter(w => w.id !== correctWord.id);
-  
+
   // 随机选择干扰项
   while (options.length < count && others.length > 0) {
     const randomIndex = Math.floor(Math.random() * others.length);
     options.push(others.splice(randomIndex, 1)[0]);
   }
-  
+
   // 打乱顺序
   return shuffleArray(options);
 }
 
-// ==================== 拼写练习模式 ====================
-let spellingState = {
-  answer: '',
-  currentInput: ''
+// ==================== 口语练习模式 (云知声) ====================
+let oralState = {
+  recorder: null,
+  ws: null,
+  sid: null,
+  currentWord: null,
+  status: 'IDLE', // IDLE, CONNECTING, RECORDING, EVALUATING
+  retryCount: 0,
+  maxRetries: 1,
 };
 
-function renderSpellingMode(container) {
+const YS_CONFIG = {
+  APP_KEY: "6vo4cqz4r4itar5srgldiadztclb2ephetjg2iag",
+  SECRET: "5d6a3ebcab29ee9d6362e61ff3997bd4",
+  WS_URL: "wss://wss-edu.hivoice.cn:443/ws/eval/"
+};
+
+function generateGuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = (Math.random() * 16) | 0,
+      v = c == 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// 更新录音状态 UI
+function updateOralUI(statusText, isRecording = false) {
+  const recordBtn = document.getElementById('oralRecordBtn');
+  const statusEl = document.getElementById('oralStatusText');
+  const waveform = document.getElementById('oralWaveform');
+
+  if (statusEl) statusEl.textContent = statusText;
+
+  if (recordBtn) {
+    if (isRecording) {
+      recordBtn.classList.add('recording');
+    } else {
+      recordBtn.classList.remove('recording');
+    }
+  }
+
+  if (waveform) {
+    if (isRecording) {
+      waveform.classList.add('active');
+    } else {
+      waveform.classList.remove('active');
+    }
+  }
+}
+
+// 渲染口语练习模式
+function renderOralMode(container) {
   const unit = getCurrentUnit();
   const word = unit.vocabulary[gameState.currentIndex];
-  
-  spellingState.answer = word.english.toLowerCase();
-  spellingState.currentInput = '';
-  
-  const letterBoxes = word.english.split('').map((_, i) => `
-    <div class="letter-box ${i === 0 ? 'active' : ''}" id="letterBox${i}"></div>
-  `).join('');
-  
+
+  oralState.currentWord = word;
+  oralState.status = 'IDLE';
+  oralState.retryCount = 0;
+
   container.innerHTML = `
-    <div class="spelling-container">
-      <div class="spelling-prompt">
-        <div style="font-size: 5rem; margin-bottom: 12px;">${getWordEmoji(word.english)}</div>
-        <div class="spelling-chinese">${word.chinese}</div>
-        <div class="spelling-hint">音标：${word.soundmark}</div>
+    <div class="oral-container">
+      <div class="oral-card" id="oralCard">
+        <div class="oral-word-display">
+          <div class="oral-chinese">${word.chinese}</div>
+        </div>
       </div>
-      <button class="sound-btn" onclick="playWordSound('${word.english}')" style="margin: 8px 0;">🔊 再听一次</button>
-      <div class="spelling-input-wrapper" id="spellingBoxes">
-        ${letterBoxes}
+      
+      <div class="oral-controls">
+        <div id="oralStatusText" class="oral-status-text">点击开始录音</div>
+        <button class="oral-record-btn" id="oralRecordBtn" onclick="toggleOralRecording()">
+          <div class="oral-waveform" id="oralWaveform">
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+          </div>
+        </button>
       </div>
-      <div class="spelling-keyboard" id="spellingKeyboard">
-        ${generateKeyboard()}
-      </div>
-      <button class="check-btn" onclick="checkSpelling()" id="spellingCheckBtn" disabled>检查答案</button>
     </div>
   `;
-  
-  // 自动播放单词发音
-  setTimeout(() => {
-    playWordSound(word.english);
-  }, 300);
 }
 
-function generateKeyboard() {
-  const rows = [
-    'qwertyuiop',
-    'asdfghjkl',
-    'zxcvbnm'
-  ];
-  
-  let html = '';
-  rows.forEach(row => {
-    html += '<div style="display: flex; gap: 6px; justify-content: center; width: 100%;">';
-    row.split('').forEach(letter => {
-      html += `<button class="key-btn" onclick="typeSpellingLetter('${letter}')">${letter}</button>`;
-    });
-    if (row === 'zxcvbnm') {
-      html += `<button class="key-btn backspace" onclick="deleteSpellingLetter()">⌫</button>`;
-    }
-    html += '</div>';
-  });
-  
-  return html;
-}
-
-function typeSpellingLetter(letter) {
-  if (spellingState.currentInput.length >= spellingState.answer.length) return;
-  
-  spellingState.currentInput += letter;
-  updateSpellingBoxes();
-  
-  // 检查是否完成输入
-  if (spellingState.currentInput.length === spellingState.answer.length) {
-    document.getElementById('spellingCheckBtn').disabled = false;
+// 切换录音状态
+function toggleOralRecording() {
+  if (oralState.status === 'IDLE') {
+    startOralRecording();
+  } else if (oralState.status === 'RECORDING') {
+    stopOralRecording();
   }
 }
 
-function deleteSpellingLetter() {
-  if (spellingState.currentInput.length === 0) return;
-  
-  spellingState.currentInput = spellingState.currentInput.slice(0, -1);
-  updateSpellingBoxes();
-  document.getElementById('spellingCheckBtn').disabled = true;
+// 开始录音
+function startOralRecording() {
+  console.log('=== 开始录音 (云知声) ===');
+
+  // 清理
+  if (oralState.ws) {
+    try { oralState.ws.close(); } catch (e) { }
+    oralState.ws = null;
+  }
+  if (oralState.recorder) {
+    try { oralState.recorder.stop(); } catch (e) { }
+  }
+
+  oralState.status = 'CONNECTING';
+  updateOralUI('正在连接...');
+
+  const expectedWord = oralState.currentWord.english;
+  oralState.sid = generateGuid();
+
+  // 初始化 Recorder
+  try {
+    oralState.recorder = new window.Recorder((data) => {
+      // onaudioprocess: data is DataView (PCM)
+      // 发送二进制数据
+      if (oralState.ws && oralState.ws.readyState === WebSocket.OPEN) {
+        oralState.ws.send(data);
+      }
+    });
+  } catch (e) {
+    console.error("Recorder init failed", e);
+    showOralError("录音器初始化失败");
+    return;
+  }
+
+  // 初始化 WebSocket
+  try {
+    oralState.ws = new WebSocket(YS_CONFIG.WS_URL);
+  } catch (e) {
+    showOralError("无法连接评测服务器");
+    return;
+  }
+
+  oralState.ws.onopen = () => {
+    console.log('WebSocket 已连接');
+
+    // 发送参数
+    const params = {
+      mode: 'sent',
+      appkey: YS_CONFIG.APP_KEY,
+      displayText: expectedWord,
+      audioFormat: 'pcm',
+      eof: oralState.sid
+    };
+    oralState.ws.send(JSON.stringify(params));
+    console.log('参数已发送', params);
+
+    // 启动录音
+    oralState.recorder.ready().then(() => {
+      oralState.recorder.start();
+      oralState.status = 'RECORDING';
+      updateOralUI('正在录音... 点击停止', true);
+      console.log('录音已开始');
+    }, (error) => {
+      console.error('Recorder ready failed:', error);
+      showOralError('麦克风启动失败: ' + error.message);
+      oralState.ws.close();
+    });
+  };
+
+  oralState.ws.onmessage = (e) => {
+    handleEvalResult(e.data);
+  };
+
+  oralState.ws.onerror = (e) => {
+    console.error('WebSocket 错误:', e);
+    oralState.status = 'IDLE';
+    updateOralUI('连接失败，请重试');
+  };
+
+  oralState.ws.onclose = () => {
+    console.log('WebSocket Closed');
+  };
 }
 
-function updateSpellingBoxes() {
-  spellingState.answer.split('').forEach((_, i) => {
-    const box = document.getElementById(`letterBox${i}`);
-    box.textContent = spellingState.currentInput[i] || '';
-    box.classList.remove('active', 'correct', 'wrong');
-    
-    if (i === spellingState.currentInput.length) {
-      box.classList.add('active');
+// 停止录音
+function stopOralRecording() {
+  console.log('=== 停止录音 ===');
+
+  if (oralState.recorder) {
+    oralState.recorder.stop();
+  }
+
+  if (oralState.ws && oralState.ws.readyState === WebSocket.OPEN) {
+    oralState.ws.send(oralState.sid); // 发送 EOF
+    console.log('EOF sent');
+  }
+
+  oralState.status = 'EVALUATING';
+  updateOralUI('评测中...');
+}
+
+// 处理评测结果
+function handleEvalResult(jsonStr) {
+  try {
+    const result = JSON.parse(jsonStr);
+    console.log('Eval Result:', result);
+
+    if (result.errcode === 0) {
+      const res = result.result;
+      const score = res.score;
+      const isCorrect = score >= 60; // 假设 100 分制
+
+      let recognizedContent = '';
+      if (res.lines && res.lines[0]) {
+        recognizedContent = `${res.lines[0].text} (${score})`;
+      }
+
+      showOralResult(isCorrect, recognizedContent, score);
+
+      if (oralState.ws) oralState.ws.close();
+
+    } else {
+      console.error('Eval Error:', result);
+      showOralError(`评测错误(${result.errcode}): ${result.errmsg}`);
+      if (oralState.ws) oralState.ws.close();
     }
-  });
+  } catch (e) {
+    console.error('Parse Result Error:', e);
+    showOralError('解析结果失败');
+  }
 }
 
-function checkSpelling() {
-  if (gameState.isAnswered) return;
-  gameState.isAnswered = true;
-  
+// 显示口语评测结果
+function showOralResult(isCorrect, recognizedContent, score) {
+  const card = document.getElementById('oralCard');
+  const statusText = document.getElementById('oralStatusText');
   const unit = getCurrentUnit();
   const word = unit.vocabulary[gameState.currentIndex];
-  const isCorrect = spellingState.currentInput.toLowerCase() === spellingState.answer;
-  
-  // 显示结果
-  spellingState.answer.split('').forEach((letter, i) => {
-    const box = document.getElementById(`letterBox${i}`);
-    if (spellingState.currentInput[i]?.toLowerCase() === letter.toLowerCase()) {
-      box.classList.add('correct');
-    } else {
-      box.classList.add('wrong');
-    }
-  });
-  
+
   if (isCorrect) {
+    // 正确
+    card.classList.add('correct');
+    card.innerHTML = `
+      <div class="oral-word-display">
+        <div class="oral-result-text correct">${word.english}</div>
+        <div class="oral-score">得分: ${Math.round(score)}</div>
+      </div>
+    `;
+    if (statusText) statusText.textContent = '发音正确! 🎉';
+
     handleCorrectAnswer(word);
+    oralState.retryCount = 0;
+
+    setTimeout(() => {
+      nextQuestion();
+    }, 1500);
+
   } else {
-    handleWrongAnswer(word);
+    // 错误
+    card.classList.add('incorrect');
+    card.innerHTML = `
+      <div class="oral-word-display">
+        <div class="oral-result-text incorrect">${word.english}</div>
+        <div class="oral-expected">得分: ${Math.round(score)} / 需60分</div>
+      </div>
+    `;
+
+    if (oralState.retryCount < oralState.maxRetries) {
+      oralState.retryCount++;
+      if (statusText) statusText.textContent = '分数太低，再试一次!';
+      setTimeout(() => {
+        resetOralCard();
+      }, 2000);
+    } else {
+      if (statusText) statusText.textContent = '继续加油!';
+      handleWrongAnswer(word);
+      oralState.retryCount = 0;
+      setTimeout(() => {
+        nextQuestion();
+      }, 2000);
+    }
   }
-  
-  setTimeout(() => nextQuestion(), 2000);
+
+  oralState.status = 'IDLE';
+  updateOralUI('点击开始录音');
+}
+
+// 重置口语卡片
+function resetOralCard() {
+  const card = document.getElementById('oralCard');
+  const word = oralState.currentWord;
+
+  if (card && word) {
+    card.classList.remove('correct', 'incorrect');
+    card.innerHTML = `
+      <div class="oral-word-display">
+        <div class="oral-chinese">${word.chinese}</div>
+      </div>
+    `;
+  }
+
+  oralState.status = 'IDLE';
+  updateOralUI('点击开始录音');
+}
+
+// ==================== 错误处理 ====================
+function showOralError(message) {
+  const statusText = document.getElementById('oralStatusText');
+  if (statusText) {
+    statusText.textContent = message || '出错了，请重试';
+  }
+  oralState.status = 'IDLE';
+  updateOralUI(message || '出错了，请重试');
 }
 
 // ==================== 句子排序模式 ====================
@@ -489,11 +676,11 @@ let wordPairingState = {
 function renderSentenceMode(container) {
   const unit = getCurrentUnit();
   const sentence = unit.sentences[gameState.currentIndex];
-  
+
   // 40%概率使用配对模式，60%概率使用排序模式
   const usePairingMode = Math.random() < 0.4;
   sentenceState.isPairingMode = usePairingMode;
-  
+
   if (usePairingMode) {
     renderWordPairingMode(container, sentence);
   } else {
@@ -507,7 +694,7 @@ function renderSentenceOrderingMode(container, sentence) {
   sentenceState.correctOrder = sentence.english.replace(/[.,!?]/g, '').split(' ');
   sentenceState.words = shuffleArray([...sentenceState.correctOrder]);
   sentenceState.placedWords = [];
-  
+
   container.innerHTML = `
     <div class="sentence-container">
       <div class="sentence-chinese">${sentence.chinese}</div>
@@ -523,7 +710,7 @@ function renderSentenceOrderingMode(container, sentence) {
       <button class="check-btn" onclick="checkSentence()" id="sentenceCheckBtn" disabled>检查答案</button>
     </div>
   `;
-  
+
   // 自动播放句子发音
   setTimeout(() => {
     playSentenceSound(sentence.english);
@@ -534,17 +721,17 @@ function renderSentenceOrderingMode(container, sentence) {
 function renderWordPairingMode(container, sentence) {
   // 使用当前单元的词汇表建立中英文对照
   const unit = getCurrentUnit();
-  
+
   // 获取句子中的英文单词
   const englishWords = sentence.english.replace(/[.,!?]/g, '').split(' ').filter(w => w.length > 0);
-  
+
   // 为每个英文单词找到对应的中文翻译（从词汇表中查找）
   const pairs = [];
   const vocabMap = {};
   unit.vocabulary.forEach(v => {
     vocabMap[v.english.toLowerCase()] = v.chinese;
   });
-  
+
   // 找出句子中能够配对的单词
   englishWords.forEach(word => {
     const lowerWord = word.toLowerCase();
@@ -552,7 +739,7 @@ function renderWordPairingMode(container, sentence) {
       pairs.push({ chinese: vocabMap[lowerWord], english: word });
     }
   });
-  
+
   // 如果找不到足够的配对单词，使用基本的句子词汇
   if (pairs.length < 3) {
     // 使用一些常见的词汇对照
@@ -568,7 +755,7 @@ function renderWordPairingMode(container, sentence) {
       { chinese: '那个', english: 'that' },
       { chinese: '什么', english: 'what' }
     ];
-    
+
     englishWords.forEach(word => {
       const found = commonPairs.find(p => p.english.toLowerCase() === word.toLowerCase());
       if (found && !pairs.some(p => p.english.toLowerCase() === word.toLowerCase())) {
@@ -576,17 +763,17 @@ function renderWordPairingMode(container, sentence) {
       }
     });
   }
-  
+
   // 确保至少有3个配对
   if (pairs.length < 3) {
     // 如果还不够，直接用排序模式
     renderSentenceOrderingMode(container, sentence);
     return;
   }
-  
+
   // 限制最多6个配对
   const finalPairs = pairs.slice(0, Math.min(6, pairs.length));
-  
+
   wordPairingState.pairs = finalPairs;
   wordPairingState.shuffledChinese = shuffleArray([...finalPairs.map(p => p.chinese)]);
   wordPairingState.shuffledEnglish = shuffleArray([...finalPairs.map(p => p.english)]);
@@ -594,7 +781,7 @@ function renderWordPairingMode(container, sentence) {
   wordPairingState.selectedEnglish = null;
   wordPairingState.matchedPairs = [];
   wordPairingState.isProcessing = false;
-  
+
   container.innerHTML = `
     <div class="pairing-container">
       <div class="pairing-instruction">
@@ -619,7 +806,7 @@ function renderWordPairingMode(container, sentence) {
       </div>
     </div>
   `;
-  
+
   // 自动播放句子发音
   setTimeout(() => {
     playSentenceSound(sentence.english);
@@ -629,12 +816,12 @@ function renderWordPairingMode(container, sentence) {
 // 单词配对选择
 function selectWordPairingItem(type, index, word) {
   if (wordPairingState.isProcessing) return;
-  
+
   const element = document.getElementById(`wp${type === 'chinese' ? 'Chinese' : 'English'}-${index}`);
-  
+
   // 如果已匹配，不能再选
   if (element.classList.contains('matched')) return;
-  
+
   // 取消之前的选择
   if (type === 'chinese') {
     if (wordPairingState.selectedChinese !== null) {
@@ -654,11 +841,11 @@ function selectWordPairingItem(type, index, word) {
     }
     wordPairingState.selectedEnglish = { index, word };
     element.classList.add('selected');
-    
+
     // 播放英文单词发音
     playWordSound(word);
   }
-  
+
   // 检查是否两边都选了
   if (wordPairingState.selectedChinese && wordPairingState.selectedEnglish) {
     checkWordPairingMatch();
@@ -668,42 +855,42 @@ function selectWordPairingItem(type, index, word) {
 // 检查单词配对是否正确
 function checkWordPairingMatch() {
   wordPairingState.isProcessing = true;
-  
+
   const chineseWord = wordPairingState.selectedChinese.word;
   const englishWord = wordPairingState.selectedEnglish.word;
   const chineseEl = document.getElementById(`wpChinese-${wordPairingState.selectedChinese.index}`);
   const englishEl = document.getElementById(`wpEnglish-${wordPairingState.selectedEnglish.index}`);
-  
+
   // 检查是否匹配
   const isMatch = wordPairingState.pairs.some(p => p.chinese === chineseWord && p.english === englishWord);
-  
+
   if (isMatch) {
     // 配对成功
     chineseEl.classList.remove('selected');
     englishEl.classList.remove('selected');
     chineseEl.classList.add('correct');
     englishEl.classList.add('correct');
-    
+
     // 短暂显示绿色后变灰
     setTimeout(() => {
       chineseEl.classList.remove('correct');
       englishEl.classList.remove('correct');
       chineseEl.classList.add('matched');
       englishEl.classList.add('matched');
-      
+
       wordPairingState.matchedPairs.push({ chinese: chineseWord, english: englishWord });
       updateWordPairingProgress();
-      
+
       wordPairingState.selectedChinese = null;
       wordPairingState.selectedEnglish = null;
       wordPairingState.isProcessing = false;
-      
+
       // 检查是否全部完成
       if (wordPairingState.matchedPairs.length === wordPairingState.pairs.length) {
         handleWordPairingComplete();
       }
     }, 600);
-    
+
     // 增加分数
     gameState.score += 5;
     gameState.streak++;
@@ -714,17 +901,17 @@ function checkWordPairingMatch() {
     englishEl.classList.remove('selected');
     chineseEl.classList.add('wrong');
     englishEl.classList.add('wrong');
-    
+
     // 短暂显示红色后恢复
     setTimeout(() => {
       chineseEl.classList.remove('wrong');
       englishEl.classList.remove('wrong');
-      
+
       wordPairingState.selectedChinese = null;
       wordPairingState.selectedEnglish = null;
       wordPairingState.isProcessing = false;
     }, 500);
-    
+
     // 重置连击
     gameState.streak = 0;
     updateStats();
@@ -741,7 +928,7 @@ function updateWordPairingProgress() {
 function handleWordPairingComplete() {
   const unit = getCurrentUnit();
   const sentence = unit.sentences[gameState.currentIndex];
-  
+
   setTimeout(() => {
     handleCorrectAnswer(sentence);
     setTimeout(() => nextQuestion(), 1500);
@@ -751,12 +938,12 @@ function handleWordPairingComplete() {
 function placeWord(index) {
   const wordElement = document.getElementById(`word${index}`);
   if (wordElement.classList.contains('placed')) return;
-  
+
   wordElement.classList.add('placed');
   sentenceState.placedWords.push(sentenceState.words[index]);
-  
+
   updateDropzone();
-  
+
   // 检查是否所有单词都已放置
   if (sentenceState.placedWords.length === sentenceState.correctOrder.length) {
     document.getElementById('sentenceCheckBtn').disabled = false;
@@ -776,14 +963,14 @@ function updateDropzone() {
 
 function removeWord(index) {
   const removedWord = sentenceState.placedWords.splice(index, 1)[0];
-  
+
   // 找到原始位置并恢复
   sentenceState.words.forEach((word, i) => {
     if (word === removedWord && document.getElementById(`word${i}`).classList.contains('placed')) {
       document.getElementById(`word${i}`).classList.remove('placed');
     }
   });
-  
+
   updateDropzone();
   document.getElementById('sentenceCheckBtn').disabled = true;
 }
@@ -791,11 +978,11 @@ function removeWord(index) {
 function checkSentence() {
   if (gameState.isAnswered) return;
   gameState.isAnswered = true;
-  
+
   const unit = getCurrentUnit();
   const sentence = unit.sentences[gameState.currentIndex];
   const isCorrect = sentenceState.placedWords.join(' ') === sentenceState.correctOrder.join(' ');
-  
+
   if (isCorrect) {
     handleCorrectAnswer({ english: sentence.english, chinese: sentence.chinese });
   } else {
@@ -809,7 +996,7 @@ function checkSentence() {
       `).join('')}
     `;
   }
-  
+
   setTimeout(() => nextQuestion(), 2000);
 }
 
@@ -817,12 +1004,12 @@ function checkSentence() {
 function renderFillMode(container) {
   const unit = getCurrentUnit();
   const sentence = unit.sentences[gameState.currentIndex];
-  
+
   // 随机选择一个单词作为填空
   const words = sentence.english.split(' ');
   const blankIndex = Math.floor(Math.random() * words.length);
   const correctAnswer = words[blankIndex].replace(/[.,!?]/g, '');
-  
+
   // 生成选项
   const allWords = unit.vocabulary.map(v => v.english);
   let options = [correctAnswer];
@@ -833,12 +1020,12 @@ function renderFillMode(container) {
     }
   }
   options = shuffleArray(options);
-  
+
   // 构建带空白的句子
-  const sentenceWithBlank = words.map((word, i) => 
+  const sentenceWithBlank = words.map((word, i) =>
     i === blankIndex ? '<span class="fill-blank" id="fillBlank">_____</span>' : word
   ).join(' ');
-  
+
   container.innerHTML = `
     <div class="fill-container">
       <div class="sentence-chinese" style="margin-bottom: 24px;">${sentence.chinese}</div>
@@ -857,12 +1044,12 @@ function renderFillMode(container) {
 function checkFillAnswer(selected, correct, element) {
   if (gameState.isAnswered) return;
   gameState.isAnswered = true;
-  
+
   const unit = getCurrentUnit();
   const sentence = unit.sentences[gameState.currentIndex];
-  
+
   document.getElementById('fillBlank').textContent = selected;
-  
+
   if (selected === correct) {
     element.classList.add('correct');
     handleCorrectAnswer({ english: sentence.english, chinese: sentence.chinese });
@@ -875,7 +1062,7 @@ function checkFillAnswer(selected, correct, element) {
     });
     handleWrongAnswer({ english: sentence.english, chinese: sentence.chinese });
   }
-  
+
   setTimeout(() => nextQuestion(), 1500);
 }
 
@@ -883,7 +1070,7 @@ function checkFillAnswer(selected, correct, element) {
 function renderDialogueMode(container) {
   const unit = getCurrentUnit();
   const dialogue = unit.dialogues[gameState.currentIndex];
-  
+
   if (!dialogue) {
     container.innerHTML = `
       <div class="empty-state">
@@ -893,7 +1080,7 @@ function renderDialogueMode(container) {
     `;
     return;
   }
-  
+
   container.innerHTML = `
     <div class="dialogue-container">
       <div class="dialogue-scene">
@@ -919,11 +1106,11 @@ function renderDialogueMode(container) {
 function checkDialogueAnswer(isCorrect, element, optionIndex) {
   if (gameState.isAnswered) return;
   gameState.isAnswered = true;
-  
+
   const unit = getCurrentUnit();
   const dialogue = unit.dialogues[gameState.currentIndex];
   const correctOption = dialogue.options.find(o => o.correct);
-  
+
   if (isCorrect) {
     element.classList.add('correct');
     handleCorrectAnswer({ english: correctOption.text, chinese: dialogue.context });
@@ -937,7 +1124,7 @@ function checkDialogueAnswer(isCorrect, element, optionIndex) {
     });
     handleWrongAnswer({ english: dialogue.speakerA, chinese: dialogue.context });
   }
-  
+
   setTimeout(() => nextQuestion(), 1500);
 }
 
@@ -947,21 +1134,21 @@ function handleCorrectAnswer(item) {
   const bonusCoins = 10 + Math.floor(gameState.streak / 3) * 5;
   addCoins(bonusCoins);
   addScore(10);
-  
+
   playSound('correct');
   showFeedback(true, getRandomEncouragement(), `+${bonusCoins} 金币`, bonusCoins);
-  
+
   if (gameState.streak % 5 === 0) {
     showConfetti();
   }
-  
+
   updateStats();
   saveProgress();
 }
 
 function handleWrongAnswer(item) {
   gameState.streak = 0;
-  
+
   // 添加到错题本
   const key = `${item.english}`;
   if (!gameState.mistakes[key]) {
@@ -973,10 +1160,10 @@ function handleWrongAnswer(item) {
     };
   }
   gameState.mistakes[key].count++;
-  
+
   playSound('wrong');
   showFeedback(false, getRandomErrorMessage(), item.english);
-  
+
   updateStats();
   saveProgress();
 }
@@ -1006,21 +1193,21 @@ function showFeedback(isSuccess, title, message, coins = 0) {
   const messageEl = document.getElementById('feedbackMessage');
   const coinReward = document.getElementById('coinReward');
   const coinValue = document.getElementById('coinRewardValue');
-  
+
   icon.textContent = isSuccess ? '🎉' : '💪';
   titleEl.textContent = title;
   titleEl.className = `feedback-title ${isSuccess ? 'success' : 'error'}`;
   messageEl.textContent = message;
-  
+
   if (isSuccess && coins > 0) {
     coinReward.classList.remove('hidden');
     coinValue.textContent = `+${coins}`;
   } else {
     coinReward.classList.add('hidden');
   }
-  
+
   overlay.classList.add('show');
-  
+
   // 自动关闭
   setTimeout(() => closeFeedback(), 1200);
 }
@@ -1033,7 +1220,7 @@ function showCompletionFeedback() {
   const bonusCoins = 50;
   addCoins(bonusCoins);
   showConfetti();
-  
+
   setTimeout(() => {
     showFeedback(true, '挑战完成！🏆', `获得 ${bonusCoins} 金币奖励！`, bonusCoins);
     setTimeout(() => exitGame(), 2000);
@@ -1052,9 +1239,9 @@ function getRandomErrorMessage() {
 function showMistakeBook() {
   const overlay = document.getElementById('mistakeBookOverlay');
   const list = document.getElementById('mistakesList');
-  
+
   const mistakes = Object.values(gameState.mistakes);
-  
+
   if (mistakes.length === 0) {
     list.innerHTML = `
       <div class="empty-state" style="min-height: 150px;">
@@ -1076,7 +1263,7 @@ function showMistakeBook() {
       </div>
     `).join('');
   }
-  
+
   overlay.classList.add('show');
 }
 
@@ -1090,10 +1277,10 @@ function playSound(type) {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)();
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
-  
+
   oscillator.connect(gainNode);
   gainNode.connect(audioContext.destination);
-  
+
   if (type === 'correct') {
     oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
     oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
@@ -1126,9 +1313,9 @@ function showConfetti() {
   const container = document.getElementById('confettiContainer');
   container.classList.remove('hidden');
   container.innerHTML = '';
-  
+
   const colors = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
-  
+
   for (let i = 0; i < 50; i++) {
     const confetti = document.createElement('div');
     confetti.className = 'confetti-piece';
@@ -1137,7 +1324,7 @@ function showConfetti() {
     confetti.style.animationDelay = Math.random() * 0.5 + 's';
     container.appendChild(confetti);
   }
-  
+
   setTimeout(() => {
     container.classList.add('hidden');
     container.innerHTML = '';
@@ -1168,7 +1355,7 @@ function getWordEmoji(word) {
     'candy': '🍬',
     'chip': '🍟',
     'juice': '🧃',
-    
+
     // Unit 2 - Environment
     'water': '💧',
     'bottle': '🍶',
@@ -1180,7 +1367,7 @@ function getWordEmoji(word) {
     'clean': '✨',
     'waste': '🗑️',
     'protect': '🛡️',
-    
+
     // Unit 3 - Friendship
     'friend': '👫',
     'share': '🤝',
@@ -1192,7 +1379,7 @@ function getWordEmoji(word) {
     'play': '🎮',
     'listen': '👂',
     'respect': '🙏',
-    
+
     // Unit 4 - Self-improvement
     'try': '💪',
     'learn': '📚',
@@ -1204,7 +1391,7 @@ function getWordEmoji(word) {
     'success': '🏆',
     'dream': '💭',
     'grow': '🌱',
-    
+
     // Unit 5 - Future
     'future': '🔮',
     'robot': '🤖',
@@ -1216,7 +1403,7 @@ function getWordEmoji(word) {
     'smart': '🧠',
     'live': '🏠',
     'change': '🔄',
-    
+
     // Unit 1 - Additional Food
     'fish': '🐟',
     'beef': '🥩',
@@ -1228,7 +1415,7 @@ function getWordEmoji(word) {
     'chocolate': '🍫',
     'cola': '🥤',
     'biscuit': '🍪',
-    
+
     // Unit 6 - Festivals
     'festival': '🎉',
     'celebrate': '🎊',
@@ -1243,7 +1430,7 @@ function getWordEmoji(word) {
     'party': '🎈',
     'candle': '🕯️'
   };
-  
+
   return emojiMap[word.toLowerCase()] || '📝';
 }
 
@@ -1259,13 +1446,13 @@ let challengeState = {
 
 function startChallengeMode() {
   const unit = getCurrentUnit();
-  
+
   // 准备混合题目
   challengeState.questions = [];
   challengeState.timer = 60;
   challengeState.correctCount = 0;
   challengeState.totalCount = 0;
-  
+
   // 添加词汇选择题
   unit.vocabulary.forEach(word => {
     challengeState.questions.push({
@@ -1274,20 +1461,20 @@ function startChallengeMode() {
       options: generateOptions(unit.vocabulary, word, 4)
     });
   });
-  
+
   // 打乱问题顺序
   challengeState.questions = shuffleArray(challengeState.questions);
-  
+
   // 开始计时
   challengeState.timerInterval = setInterval(updateChallengeTimer, 1000);
-  
+
   // 显示第一题
   nextChallengeQuestion();
 }
 
 function updateChallengeTimer() {
   challengeState.timer--;
-  
+
   const timerEl = document.getElementById('challengeTimer');
   if (timerEl) {
     timerEl.textContent = challengeState.timer;
@@ -1295,7 +1482,7 @@ function updateChallengeTimer() {
       timerEl.classList.add('warning');
     }
   }
-  
+
   if (challengeState.timer <= 0) {
     endChallenge();
   }
@@ -1306,7 +1493,7 @@ function nextChallengeQuestion() {
     endChallenge();
     return;
   }
-  
+
   gameState.isAnswered = false;
   challengeState.currentQuestion = challengeState.questions.shift();
   renderChallengeQuestion();
@@ -1315,7 +1502,7 @@ function nextChallengeQuestion() {
 function renderChallengeQuestion() {
   const container = document.getElementById('gameContent');
   const q = challengeState.currentQuestion;
-  
+
   container.innerHTML = `
     <div class="challenge-timer">
       <span class="timer-icon">⏱️</span>
@@ -1344,9 +1531,9 @@ function renderChallengeQuestion() {
 function checkChallengeAnswer(selected, correct, element) {
   if (gameState.isAnswered) return;
   gameState.isAnswered = true;
-  
+
   challengeState.totalCount++;
-  
+
   if (selected === correct) {
     element.classList.add('correct');
     challengeState.correctCount++;
@@ -1361,20 +1548,20 @@ function checkChallengeAnswer(selected, correct, element) {
     });
     playSound('wrong');
   }
-  
+
   updateStats();
-  
+
   setTimeout(() => nextChallengeQuestion(), 800);
 }
 
 function endChallenge() {
   clearInterval(challengeState.timerInterval);
-  
+
   const bonusCoins = challengeState.correctCount * 10;
   addCoins(bonusCoins);
-  
+
   showConfetti();
-  
+
   const container = document.getElementById('gameContent');
   container.innerHTML = `
     <div style="text-align: center; padding: 40px;">
@@ -1393,7 +1580,7 @@ function endChallenge() {
       <button class="nav-btn" onclick="exitGame()">返回</button>
     </div>
   `;
-  
+
   saveProgress();
 }
 
@@ -1420,7 +1607,7 @@ window.addEventListener('beforeunload', () => {
     learningStats.totalStudyTime += sessionMinutes;
     localStorage.setItem('totalStudyTime', learningStats.totalStudyTime);
   }
-  
+
   // 更新今日学习数据
   const today = new Date().toISOString().split('T')[0];
   learningStats.weeklyData[today] = (learningStats.weeklyData[today] || 0) + 1;
@@ -1432,15 +1619,15 @@ function recordAnswer(isCorrect) {
   if (isCorrect) {
     learningStats.correctAnswers++;
   }
-  
+
   if (gameState.streak > learningStats.maxStreak) {
     learningStats.maxStreak = gameState.streak;
     localStorage.setItem('maxStreak', learningStats.maxStreak);
   }
-  
+
   localStorage.setItem('totalAnswers', learningStats.totalAnswers);
   localStorage.setItem('correctAnswers', learningStats.correctAnswers);
-  
+
   // 更新今日数据
   const today = new Date().toISOString().split('T')[0];
   learningStats.weeklyData[today] = (learningStats.weeklyData[today] || 0) + 1;
@@ -1462,18 +1649,18 @@ function updateStatsData() {
   // 计算已学单词
   const totalWords = learningData.units.reduce((sum, unit) => sum + unit.vocabulary.length, 0);
   document.getElementById('statsTotalWords').textContent = totalWords;
-  
+
   // 正确率
-  const correctRate = learningStats.totalAnswers > 0 
-    ? Math.round((learningStats.correctAnswers / learningStats.totalAnswers) * 100) 
+  const correctRate = learningStats.totalAnswers > 0
+    ? Math.round((learningStats.correctAnswers / learningStats.totalAnswers) * 100)
     : 0;
   document.getElementById('statsCorrectRate').textContent = `${correctRate}%`;
-  
+
   // 最长连击
   document.getElementById('statsMaxStreak').textContent = learningStats.maxStreak;
-  
+
   // 学习时长
-  const currentSessionMinutes = learningStats.studyStartTime 
+  const currentSessionMinutes = learningStats.studyStartTime
     ? Math.floor((Date.now() - learningStats.studyStartTime) / 60000)
     : 0;
   const totalMinutes = learningStats.totalStudyTime + currentSessionMinutes;
@@ -1484,7 +1671,7 @@ function renderWeeklyChart() {
   const chart = document.getElementById('weeklyChart');
   const days = ['日', '一', '二', '三', '四', '五', '六'];
   const today = new Date();
-  
+
   // 获取最近7天的数据
   const weekData = [];
   for (let i = 6; i >= 0; i--) {
@@ -1497,10 +1684,10 @@ function renderWeeklyChart() {
       isToday: i === 0
     });
   }
-  
+
   // 找到最大值
   const maxCount = Math.max(...weekData.map(d => d.count), 1);
-  
+
   chart.innerHTML = weekData.map(d => `
     <div class="chart-bar ${d.isToday ? 'active' : ''}" 
          style="--bar-height: ${Math.max((d.count / maxCount) * 100, 5)}%">
@@ -1511,14 +1698,14 @@ function renderWeeklyChart() {
 
 function renderUnitProgress() {
   const list = document.getElementById('unitProgressList');
-  
+
   list.innerHTML = learningData.units.map(unit => {
     // 计算进度（这里简化为基于错题本的数据）
     const unitMistakes = Object.values(gameState.mistakes).filter(m => m.unit === unit.id).length;
     const totalWords = unit.vocabulary.length;
     const masteredWords = Math.max(0, totalWords - unitMistakes);
     const progress = Math.round((masteredWords / totalWords) * 100);
-    
+
     return `
       <div class="unit-progress-item">
         <div class="unit-progress-icon">${unit.icon}</div>
@@ -1543,7 +1730,7 @@ function exportLearningRecord() {
       totalScore: gameState.score,
       totalAnswers: learningStats.totalAnswers,
       correctAnswers: learningStats.correctAnswers,
-      correctRate: learningStats.totalAnswers > 0 
+      correctRate: learningStats.totalAnswers > 0
         ? Math.round((learningStats.correctAnswers / learningStats.totalAnswers) * 100) + '%'
         : '0%',
       maxStreak: learningStats.maxStreak,
@@ -1552,7 +1739,7 @@ function exportLearningRecord() {
     mistakes: Object.values(gameState.mistakes),
     weeklyData: learningStats.weeklyData
   };
-  
+
   // 创建文本报告
   let report = `
 ╔══════════════════════════════════════════════════════════════╗
@@ -1573,7 +1760,7 @@ function exportLearningRecord() {
 
 ═══════════════════ 错题记录 ═══════════════════
 `;
-  
+
   if (data.mistakes.length > 0) {
     data.mistakes.forEach((m, i) => {
       report += `\n${i + 1}. ${m.english} - ${m.chinese} (错误${m.count}次)`;
@@ -1581,9 +1768,9 @@ function exportLearningRecord() {
   } else {
     report += '\n🎉 太棒了！没有错题记录！';
   }
-  
+
   report += '\n\n═══════════════════ 继续加油！ ═══════════════════\n';
-  
+
   // 下载文件
   const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -1594,19 +1781,19 @@ function exportLearningRecord() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  
+
   showFeedback(true, '导出成功！', '学习报告已下载', 0);
 }
 
 // 在正确/错误答案处理中记录统计
 const originalHandleCorrectAnswer = handleCorrectAnswer;
-handleCorrectAnswer = function(item) {
+handleCorrectAnswer = function (item) {
   recordAnswer(true);
   originalHandleCorrectAnswer(item);
 };
 
 const originalHandleWrongAnswer = handleWrongAnswer;
-handleWrongAnswer = function(item) {
+handleWrongAnswer = function (item) {
   recordAnswer(false);
   originalHandleWrongAnswer(item);
 };
@@ -1618,25 +1805,25 @@ async function playWordSound(word) {
   if ('speechSynthesis' in window) {
     // 取消正在播放的语音
     speechSynthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = 'en-US';
     utterance.rate = 0.8; // 稍慢一点，适合学习
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
-    
+
     // 尝试找到更好的英语声音
     const voices = speechSynthesis.getVoices();
-    const englishVoice = voices.find(v => 
+    const englishVoice = voices.find(v =>
       v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Microsoft'))
     ) || voices.find(v => v.lang.startsWith('en-US'));
-    
+
     if (englishVoice) {
       utterance.voice = englishVoice;
     }
-    
+
     speechSynthesis.speak(utterance);
-    
+
     // 添加视觉反馈
     const soundBtns = document.querySelectorAll('.sound-btn');
     soundBtns.forEach(btn => {
@@ -1652,12 +1839,12 @@ async function playWordSound(word) {
 function playSentenceSound(sentence) {
   if ('speechSynthesis' in window) {
     speechSynthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(sentence);
     utterance.lang = 'en-US';
     utterance.rate = 0.75; // 句子读慢一点
     utterance.pitch = 1.0;
-    
+
     speechSynthesis.speak(utterance);
   }
 }

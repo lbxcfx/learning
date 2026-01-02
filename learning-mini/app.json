@@ -1,0 +1,42 @@
+{
+    "pages": [
+        "pages/index/index",
+        "pages/learn/learn",
+        "pages/rank/rank",
+        "pages/profile/profile"
+    ],
+    "window": {
+        "backgroundTextStyle": "light",
+        "navigationBarBackgroundColor": "#6366f1",
+        "navigationBarTitleText": "五年级英语学习乐园",
+        "navigationBarTextStyle": "white"
+    },
+    "tabBar": {
+        "color": "#999999",
+        "selectedColor": "#6366f1",
+        "backgroundColor": "#ffffff",
+        "borderStyle": "black",
+        "list": [
+            {
+                "pagePath": "pages/index/index",
+                "text": "学习",
+                "iconPath": "images/learn_v3.png",
+                "selectedIconPath": "images/learn-active_v3.png"
+            },
+            {
+                "pagePath": "pages/rank/rank",
+                "text": "排行榜",
+                "iconPath": "images/rank_v3.png",
+                "selectedIconPath": "images/rank-active_v3.png"
+            },
+            {
+                "pagePath": "pages/profile/profile",
+                "text": "我的",
+                "iconPath": "images/profile_v3.png",
+                "selectedIconPath": "images/profile-active_v3.png"
+            }
+        ]
+    },
+    "sitemapLocation": "sitemap.json",
+    "style": "v2"
+}
