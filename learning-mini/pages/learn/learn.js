@@ -2,6 +2,15 @@
 const app = getApp();
 const learningData = require('../../utils/data.js');
 const sha256 = require('../../utils/sha256_v2.js').sha256;
+const md5 = require('../../utils/md5.js').md5;
+
+// 云存储音频配置
+const CLOUD_AUDIO_CONFIG = {
+    // 云存储wavs文件夹的fileID前缀 (需要根据实际云环境调整)
+    FILE_PREFIX: 'cloud://cloud1-9gyx98pv7e7f0bed.636c-cloud1-9gyx98pv7e7f0bed-1311874709/wavs/',
+    // 云存储请求超时时间 (毫秒)
+    TIMEOUT: 3000
+};
 
 // 云知声TTS配置 - 与语音评测使用相同的密钥
 const YS_TTS_CONFIG = {
@@ -249,13 +258,120 @@ Page({
         this.setData({ isFlipped: !this.data.isFlipped });
     },
 
-    // 使用云知声TTS播放音频
+    /**
+     * 获取文本对应的云存储音频文件ID
+     * @param {string} text - 音频文本
+     * @returns {string} - 云存储fileID
+     */
+    getCloudAudioFileId(text) {
+        // 使用小写、去除首尾空格后的文本生成MD5
+        const normalizedText = text.trim().toLowerCase();
+        const hash = md5(normalizedText);
+        return `${CLOUD_AUDIO_CONFIG.FILE_PREFIX}${hash}.wav`;
+    },
+
+    /**
+     * 播放音频文本 (主入口)
+     * 优先尝试云存储，超时或失败后回退到云知声TTS API
+     * @param {string} text - 要播放的文本
+     */
     playAudioText(text) {
         if (!text) return;
-        console.log('TTS: 播放文本 (云知声API):', text);
+        console.log('TTS: 播放文本:', text);
 
-        // 关闭之前的连接
+        // 关闭之前的连接和播放
         this.stopTTS();
+
+        // 尝试从云存储获取音频
+        this.playAudioFromCloudStorage(text);
+    },
+
+    /**
+     * 从云存储播放音频 (带超时回退)
+     * @param {string} text - 音频文本
+     */
+    playAudioFromCloudStorage(text) {
+        const fileID = this.getCloudAudioFileId(text);
+        console.log('TTS: 尝试从云存储获取:', fileID);
+
+        let isResolved = false;
+
+        // 设置超时定时器
+        const timeoutId = setTimeout(() => {
+            if (!isResolved) {
+                isResolved = true;
+                console.log('TTS: 云存储请求超时，回退到云知声API');
+                this.playAudioFromTTSApi(text);
+            }
+        }, CLOUD_AUDIO_CONFIG.TIMEOUT);
+
+        // 获取临时链接
+        wx.cloud.getTempFileURL({
+            fileList: [fileID],
+            success: res => {
+                if (isResolved) return; // 已超时，忽略结果
+
+                if (res.fileList && res.fileList.length > 0 && res.fileList[0].tempFileURL) {
+                    isResolved = true;
+                    clearTimeout(timeoutId);
+
+                    const tempUrl = res.fileList[0].tempFileURL;
+                    console.log('TTS: 云存储音频获取成功:', tempUrl);
+                    this.playAudioUrl(tempUrl);
+                } else {
+                    // 文件不存在
+                    if (!isResolved) {
+                        isResolved = true;
+                        clearTimeout(timeoutId);
+                        console.log('TTS: 云存储文件不存在，回退到云知声API');
+                        this.playAudioFromTTSApi(text);
+                    }
+                }
+            },
+            fail: err => {
+                if (!isResolved) {
+                    isResolved = true;
+                    clearTimeout(timeoutId);
+                    console.warn('TTS: 云存储获取失败:', err, '，回退到云知声API');
+                    this.playAudioFromTTSApi(text);
+                }
+            }
+        });
+    },
+
+    /**
+     * 播放音频URL
+     * @param {string} url - 音频URL
+     */
+    playAudioUrl(url) {
+        if (this._audioCtx) {
+            this._audioCtx.destroy();
+        }
+
+        this._audioCtx = wx.createInnerAudioContext();
+        this._audioCtx.src = url;
+
+        this._audioCtx.onCanplay(() => {
+            console.log('TTS: 音频就绪，开始播放');
+            this._audioCtx.play();
+        });
+
+        this._audioCtx.onError((err) => {
+            console.error('TTS: 音频播放错误:', err);
+        });
+
+        this._audioCtx.onEnded(() => {
+            console.log('TTS: 播放完成');
+        });
+    },
+
+    /**
+     * 使用云知声TTS API播放音频 (回退方案)
+     * @param {string} text - 要播放的文本
+     */
+    playAudioFromTTSApi(text) {
+        if (!text) return;
+        console.log('TTS: 使用云知声API播放:', text);
 
         // 生成签名
         const tm = +new Date();
@@ -315,8 +431,8 @@ Page({
 
         this._ttsSocketTask.onClose(() => {
             console.log('TTS: WebSocket连接关闭');
-            // 合并所有音频数据并播放
-            this.playCollectedAudio();
+            // 合并所有音频数据并播放，同时传入text用于上传
+            this.playCollectedAudio(text);
         });
 
         this._ttsSocketTask.onError((e) => {
@@ -325,19 +441,8 @@ Page({
         });
     },
 
-    // 停止TTS
-    stopTTS() {
-        if (this._ttsSocketTask) {
-            this._ttsSocketTask.close();
-            this._ttsSocketTask = null;
-        }
-        if (this._audioCtx) {
-            this._audioCtx.stop();
-        }
-    },
-
-    // 播放收集到的音频数据
-    playCollectedAudio() {
+    // 播放收集到的音频数据，并在成功后上传到云存储
+    playCollectedAudio(text) {
         if (this._ttsAudioBuffers.length === 0) {
             console.log('TTS: 没有收到音频数据');
             return;
@@ -376,26 +481,19 @@ Page({
             success: () => {
                 console.log('TTS: WAV文件保存成功:', tempFilePath);
 
-                if (this._audioCtx) {
-                    this._audioCtx.destroy();
-                }
-                this._audioCtx = wx.createInnerAudioContext();
-                this._audioCtx.src = tempFilePath;
+                // 播放音频
+                this.playAudioUrl(tempFilePath);
 
-                this._audioCtx.onError((err) => {
-                    console.error('TTS: 音频播放错误:', err);
-                });
-
+                // 播放完成后删除临时文件，但在删除前先上传
                 this._audioCtx.onEnded(() => {
                     console.log('TTS: 播放完成');
-                    // 清理临时文件
-                    fs.unlink({
-                        filePath: tempFilePath,
-                        fail: () => { } // 忽略删除失败
-                    });
+                    // 上传完成后再删除，或者不用等上传完成
                 });
 
-                this._audioCtx.play();
+                // ⚡️ 核心改动：自动上传到云存储（静默执行）
+                if (text) {
+                    this.uploadToCloud(tempFilePath, text);
+                }
             },
             fail: (err) => {
                 console.error('TTS: 保存WAV文件失败:', err);
@@ -406,6 +504,43 @@ Page({
         // 清空缓冲区
         this._ttsAudioBuffers = [];
     },
+
+    /**
+     * 上传音频到云存储
+     */
+    uploadToCloud(filePath, text) {
+        if (!wx.cloud) return;
+
+        const cloudPath = `wavs/${md5(text.trim().toLowerCase())}.wav`;
+        console.log('TTS: ☁️ 正在后台上传到云存储:', cloudPath);
+
+        wx.cloud.uploadFile({
+            cloudPath: cloudPath,
+            filePath: filePath, // 本地文件路径
+            success: res => {
+                console.log('TTS: ✅ 云存储上传成功', res.fileID);
+                // 上传成功后，可以删除本地临时文件(如果还没删)
+                // 这里不做额外处理，依赖playAudioUrl中的流程或系统清理
+            },
+            fail: err => {
+                // 如果是“文件已存在”或者是权限问题，记录一下
+                console.error('TTS: ❌ 云存储上传失败', err);
+            }
+        });
+    },
+
+    // 停止TTS
+    stopTTS() {
+        if (this._ttsSocketTask) {
+            this._ttsSocketTask.close();
+            this._ttsSocketTask = null;
+        }
+        if (this._audioCtx) {
+            this._audioCtx.stop();
+        }
+    },
+
+
 
     playSound() {
         if (this.data.currentWord) {

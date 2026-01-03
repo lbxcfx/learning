@@ -1,5 +1,12 @@
 const app = getApp();
 const sha256 = require('../../utils/sha256_v2.js').sha256;
+const md5 = require('../../utils/md5.js').md5;
+
+// 云存储音频配置
+const CLOUD_AUDIO_CONFIG = {
+    FILE_PREFIX: 'cloud://cloud1-9gyx98pv7e7f0bed.636c-cloud1-9gyx98pv7e7f0bed-1311874709/wavs/',
+    TIMEOUT: 3000
+};
 
 // 云知声TTS配置 - 与语音评测使用相同的密钥
 const YS_TTS_CONFIG = {
@@ -104,25 +111,116 @@ Page({
         }
     },
 
-    // 使用云知声TTS播放音频
+    /**
+     * 获取文本对应的云存储音频文件ID
+     */
+    getCloudAudioFileId(text) {
+        const normalizedText = text.trim().toLowerCase();
+        const hash = md5(normalizedText);
+        return `${CLOUD_AUDIO_CONFIG.FILE_PREFIX}${hash}.wav`;
+    },
+
+    /**
+     * 播放音频文本 (主入口)
+     * 优先尝试云存储，超时或失败后回退到云知声TTS API
+     */
     playAudioText(text) {
         if (!text) return;
-        console.log('TTS: 播放文本 (云知声API):', text);
+        console.log('TTS: 播放文本:', text);
 
-        // 关闭之前的连接
         this.stopTTS();
+        this.playAudioFromCloudStorage(text);
+    },
 
-        // 生成签名
+    /**
+     * 从云存储播放音频 (带超时回退)
+     */
+    playAudioFromCloudStorage(text) {
+        const fileID = this.getCloudAudioFileId(text);
+        console.log('TTS: 尝试从云存储获取:', fileID);
+
+        let isResolved = false;
+
+        const timeoutId = setTimeout(() => {
+            if (!isResolved) {
+                isResolved = true;
+                console.log('TTS: 云存储请求超时，回退到云知声API');
+                this.playAudioFromTTSApi(text);
+            }
+        }, CLOUD_AUDIO_CONFIG.TIMEOUT);
+
+        wx.cloud.getTempFileURL({
+            fileList: [fileID],
+            success: res => {
+                if (isResolved) return;
+
+                if (res.fileList && res.fileList.length > 0 && res.fileList[0].tempFileURL) {
+                    isResolved = true;
+                    clearTimeout(timeoutId);
+
+                    const tempUrl = res.fileList[0].tempFileURL;
+                    console.log('TTS: 云存储音频获取成功:', tempUrl);
+                    this.playAudioUrl(tempUrl);
+                } else {
+                    if (!isResolved) {
+                        isResolved = true;
+                        clearTimeout(timeoutId);
+                        console.log('TTS: 云存储文件不存在，回退到云知声API');
+                        this.playAudioFromTTSApi(text);
+                    }
+                }
+            },
+            fail: err => {
+                if (!isResolved) {
+                    isResolved = true;
+                    clearTimeout(timeoutId);
+                    console.warn('TTS: 云存储获取失败:', err, '，回退到云知声API');
+                    this.playAudioFromTTSApi(text);
+                }
+            }
+        });
+    },
+
+    /**
+     * 播放音频URL
+     */
+    playAudioUrl(url) {
+        if (this._audioCtx) {
+            this._audioCtx.destroy();
+        }
+
+        this._audioCtx = wx.createInnerAudioContext();
+        this._audioCtx.src = url;
+
+        this._audioCtx.onCanplay(() => {
+            console.log('TTS: 音频就绪，开始播放');
+            this._audioCtx.play();
+        });
+
+        this._audioCtx.onError((err) => {
+            console.error('TTS: 音频播放错误:', err);
+        });
+
+        this._audioCtx.onEnded(() => {
+            console.log('TTS: 播放完成');
+        });
+    },
+
+    /**
+     * 使用云知声TTS API播放音频 (回退方案)
+     */
+    playAudioFromTTSApi(text) {
+        if (!text) return;
+        console.log('TTS: 使用云知声API播放:', text);
+
         const tm = +new Date();
         const signStr = `${YS_TTS_CONFIG.APP_KEY}${tm}${YS_TTS_CONFIG.SECRET}`;
         const sign = sha256(signStr).toUpperCase();
 
-        // 创建WebSocket连接
         const wsUrl = `${YS_TTS_CONFIG.WS_URL}?appkey=${YS_TTS_CONFIG.APP_KEY}&time=${tm}&sign=${sign}`;
 
         console.log('TTS: 正在连接云知声TTS服务...');
 
-        // 重置音频缓冲区
         this._ttsAudioBuffers = [];
 
         this._ttsSocketTask = wx.connectSocket({
@@ -167,7 +265,7 @@ Page({
 
         this._ttsSocketTask.onClose(() => {
             console.log('TTS: WebSocket连接关闭');
-            this.playCollectedAudio();
+            this.playCollectedAudio(text);
         });
 
         this._ttsSocketTask.onError((e) => {
@@ -186,7 +284,7 @@ Page({
         }
     },
 
-    playCollectedAudio() {
+    playCollectedAudio(text) {
         if (this._ttsAudioBuffers.length === 0) {
             console.log('TTS: 没有收到音频数据');
             return;
@@ -240,6 +338,11 @@ Page({
                 });
 
                 this._audioCtx.play();
+
+                // 自动上传到云存储
+                if (text) {
+                    this.uploadToCloud(tempFilePath, text);
+                }
             },
             fail: (err) => {
                 console.error('TTS: 保存WAV文件失败:', err);
@@ -248,5 +351,26 @@ Page({
         });
 
         this._ttsAudioBuffers = [];
+    },
+
+    /**
+     * 上传音频到云存储
+     */
+    uploadToCloud(filePath, text) {
+        if (!wx.cloud) return;
+
+        const cloudPath = `wavs/${md5(text.trim().toLowerCase())}.wav`;
+        console.log('TTS: ☁️ 正在后台上传到云存储:', cloudPath);
+
+        wx.cloud.uploadFile({
+            cloudPath: cloudPath,
+            filePath: filePath,
+            success: res => {
+                console.log('TTS: ✅ 云存储上传成功', res.fileID);
+            },
+            fail: err => {
+                console.error('TTS: ❌ 云存储上传失败', err);
+            }
+        });
     }
 });
