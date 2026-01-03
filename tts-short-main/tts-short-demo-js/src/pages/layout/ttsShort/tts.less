@@ -1,0 +1,92 @@
+.tts {
+  display: flex;
+  width: 100%;
+}
+.voice {
+  width: 500px;
+  background: #ffffff;
+  border-radius: 4px;
+}
+.textPlay {
+  flex: 1;
+  background: #ffffff;
+  margin-left: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.speakers {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 24px;
+}
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 32px;
+}
+.row {
+  flex: 0 0 100%;
+  line-height: 32px;
+  margin-bottom: 16px;
+}
+.label {
+  width: 75px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+  display: inline-block;
+}
+.tag {
+  width: 20px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #999999;
+  display: inline-block;
+}
+.slider {
+  width: 240px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.textarea {
+  flex: 1 1 auto;
+  margin-bottom: 12px;
+  resize: none;
+  font-size: 14px;
+}
+.btns {
+  display: flex;
+  justify-content: space-between;
+}
+.textCount {
+  font-size: 14px;
+  font-weight: 400;
+  color: #999999;
+  line-height: 24px;
+}
+
+@media (max-width: 1000px) {
+  .tts {
+    display: block;
+  }
+  .voice {
+    width: auto;
+  }
+  .speakers {
+    padding: 12px;
+  }
+  .row {
+    display: flex;
+    flex: 0 0 100%;
+  }
+  .slider {
+    flex: 1 1 auto;
+    width: 0;
+  }
+  .textPlay {
+    margin: 20px 0;
+    min-height: 300px;
+    width: auto;
+  }
+}

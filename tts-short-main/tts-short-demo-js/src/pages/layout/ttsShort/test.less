@@ -1,0 +1,19 @@
+@import '../../../styles/var.less';
+.boxContainer {
+  max-width: 1200px;
+  margin: auto;
+  display: flex;
+  justify-content: space-between;
+}
+
+@media screen {
+  @media (max-width: 1024px) {
+    .boxContainer {
+      display: block;
+      padding: 0 20px;
+    }
+    .borderBox {
+      border-radius: 4px;
+    }
+  }
+}

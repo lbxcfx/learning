@@ -3,10 +3,12 @@ const app = getApp();
 const learningData = require('../../utils/data.js');
 const sha256 = require('../../utils/sha256_v2.js').sha256;
 
-const YOUDAO_TTS_CONFIG = {
-    APP_KEY: '1a88c11a7e8767f3',
-    APP_SECRET: 'jnAEoemgbmkIl5dzdmWlsPeItwiFa2n2',
-    URL: 'https://openapi.youdao.com/ttsapi'
+// 云知声TTS配置 - 与语音评测使用相同的密钥
+const YS_TTS_CONFIG = {
+    APP_KEY: "6vo4cqz4r4itar5srgldiadztclb2ephetjg2iag",
+    SECRET: "5d6a3ebcab29ee9d6362e61ff3997bd4",
+    WS_URL: "wss://ws-stts.hivoice.cn/v1/tts",
+    VOICE: "jenny-plus"  // 纯正美音发音人
 };
 
 const YS_CONFIG = {
@@ -58,6 +60,45 @@ function shuffleArray(array) {
     return newArr;
 }
 
+// PCM转WAV工具函数
+function pcmToWav(pcmData, sampleRate, channels) {
+    const dataLength = pcmData.byteLength;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+
+    // RIFF标识
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    writeString(view, 8, 'WAVE');
+
+    // fmt块
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, 1, true);  // PCM format
+    view.setUint16(22, channels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * channels * 2, true); // byte rate
+    view.setUint16(32, channels * 2, true); // block align
+    view.setUint16(34, 16, true); // bits per sample
+
+    // data块
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    // 复制PCM数据
+    const pcmView = new Uint8Array(pcmData);
+    const wavView = new Uint8Array(buffer, 44);
+    wavView.set(pcmView);
+
+    return buffer;
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
+}
+
 Page({
     data: {
         mode: 'vocab',
@@ -105,6 +146,10 @@ Page({
             retryCount: 0
         }
     },
+
+    // TTS WebSocket实例
+    _ttsSocketTask: null,
+    _ttsAudioBuffers: [],
 
     onLoad(options) {
         const mode = options.mode || 'vocab';
@@ -204,121 +249,162 @@ Page({
         this.setData({ isFlipped: !this.data.isFlipped });
     },
 
+    // 使用云知声TTS播放音频
     playAudioText(text) {
         if (!text) return;
-        console.log('Playing audio (Youdao API):', text);
+        console.log('TTS: 播放文本 (云知声API):', text);
 
-        const curtime = Math.floor(Date.now() / 1000).toString();
-        const salt = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
+        // 关闭之前的连接
+        this.stopTTS();
+
+        // 生成签名
+        const tm = +new Date();
+        const signStr = `${YS_TTS_CONFIG.APP_KEY}${tm}${YS_TTS_CONFIG.SECRET}`;
+        const sign = sha256(signStr).toUpperCase();
+
+        // 创建WebSocket连接
+        const wsUrl = `${YS_TTS_CONFIG.WS_URL}?appkey=${YS_TTS_CONFIG.APP_KEY}&time=${tm}&sign=${sign}`;
+
+        console.log('TTS: 正在连接云知声TTS服务...');
+
+        // 重置音频缓冲区
+        this._ttsAudioBuffers = [];
+
+        this._ttsSocketTask = wx.connectSocket({
+            url: wsUrl,
+            success: () => console.log('TTS: Socket连接中...')
         });
 
-        // input = q (len<=20) OR q[0..9] + len + q[len-10..len] (len>20)
-        let input = text;
-        if (text.length > 20) {
-            input = text.substring(0, 10) + text.length + text.substring(text.length - 10, text.length);
-        }
+        this._ttsSocketTask.onOpen(() => {
+            console.log('TTS: WebSocket连接成功，发送合成请求...');
+            // 发送TTS请求
+            this._ttsSocketTask.send({
+                data: JSON.stringify({
+                    format: 'pcm',
+                    vcn: YS_TTS_CONFIG.VOICE,  // jenny-plus 美音
+                    text: text,
+                    sample: 16000,
+                    speed: 40,           // 语速稍慢，适合学习
+                    volume: 50,
+                    pitch: 50,
+                    bright: 50,
+                })
+            });
+        });
 
-        // input needs to be processed but NOT double-encoded if SHA256 lib handles it
-        // BUT our SHA256 test matched. 
-        // Let's stick to the logic that worked in browser: standard string operations.
-        // Wait, the SHA256 test PASSED: 
-        // learn.js? [sm]:228 SHA256 Test (abc): 953370... (Wait, this is WRONG)
-        // Correct SHA256('abc') is ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
-        // 953370... is e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ??? No
-        // 95337015... is NOT 'abc'.
-        // SHA256('abc') = ba7816...
-        // Let's check what 953370... is.
-        // It might be 'undefined' or empty string?
-        // SHA256('') = e3b0...
-        // The SHA256 lib is definitely broken or returning a different hash.
+        this._ttsSocketTask.onMessage((res) => {
+            const data = res.data;
 
-        // I will try to use a very simple, single-file SHA256 implementation that I know works.
-        // The previous one (sha256_v2.js) clearly produced the wrong hash for 'abc'.
-
-
-        const signStr = YOUDAO_TTS_CONFIG.APP_KEY + input + salt + curtime + YOUDAO_TTS_CONFIG.APP_SECRET;
-        console.log('--- Mini Program New SHA256 ---');
-        console.log('SignStr (Raw):', signStr);
-        // Ensure sha256 receives string, verify output
-        const sign = sha256(signStr);
-        console.log('Sign (Generated):', sign);
-        console.log('SHA256 Test(abc) -> ba78...:', sha256('abc'));
-
-        wx.request({
-            url: YOUDAO_TTS_CONFIG.URL,
-            method: 'POST',
-            header: {
-                'content-type': 'application/x-www-form-urlencoded'
-            },
-            data: {
-                q: text, // Send original text
-                langType: 'en',
-                appKey: YOUDAO_TTS_CONFIG.APP_KEY,
-                salt: salt,
-                curtime: curtime,
-                sign: sign,
-                signType: 'v3'
-            },
-            responseType: 'arraybuffer',
-            success: (res) => {
-                if (res.statusCode === 200) {
-                    const contentType = res.header['Content-Type'] || res.header['content-type'];
-                    if (contentType && contentType.toLowerCase().includes('audio')) {
-                        const fs = wx.getFileSystemManager();
-                        const tempFilePath = `${wx.env.USER_DATA_PATH}/tts_${Date.now()}.mp3`;
-
-                        fs.writeFile({
-                            filePath: tempFilePath,
-                            data: res.data,
-                            encoding: 'binary',
-                            success: () => {
-                                if (this._audioCtx) {
-                                    this._audioCtx.destroy();
-                                }
-                                this._audioCtx = wx.createInnerAudioContext();
-                                this._audioCtx.src = tempFilePath;
-
-                                this._audioCtx.onError((err) => {
-                                    console.error('Audio Play Error:', err);
-                                    wx.showToast({ title: '播放出错', icon: 'none' });
-                                });
-                                this._audioCtx.play();
-                            },
-                            fail: (err) => {
-                                console.error('File Save Error:', err);
-                            }
-                        });
-                    } else {
-                        // Decode error message
-                        try {
-                            const uint8Arr = new Uint8Array(res.data);
-                            let jsonStr = '';
-                            for (let i = 0; i < uint8Arr.length; i++) {
-                                jsonStr += String.fromCharCode(uint8Arr[i]);
-                            }
-
-                            console.error('TTS API did not return audio. Content-Type:', contentType);
-                            console.error('API Response Body:', jsonStr);
-
-                            const errRes = JSON.parse(jsonStr);
-                            wx.showToast({ title: `语音失败: ${errRes.errorCode || '未知错误'}`, icon: 'none' });
-                        } catch (e) {
-                            console.error('Decode Error Response Failed:', e);
-                            wx.showToast({ title: '语音生成失败', icon: 'none' });
-                        }
+            // 检查是否是字符串（错误响应）
+            if (typeof data === 'string') {
+                try {
+                    const result = JSON.parse(data);
+                    if (result.code !== 0) {
+                        console.error('TTS错误:', result);
+                        wx.showToast({ title: '语音合成失败', icon: 'none' });
                     }
-                } else {
-                    console.error('Request failed:', res);
-                    wx.showToast({ title: '网络请求错误', icon: 'none' });
+                } catch (e) {
+                    console.error('TTS: 解析响应失败', e);
                 }
-            },
-            fail: (err) => {
-                console.error('Request Network Error:', err);
-                wx.showToast({ title: '无法加载音频', icon: 'none' });
+                this._ttsSocketTask.close();
+            } else {
+                // 二进制音频数据
+                this._ttsAudioBuffers.push(data);
             }
         });
+
+        this._ttsSocketTask.onClose(() => {
+            console.log('TTS: WebSocket连接关闭');
+            // 合并所有音频数据并播放
+            this.playCollectedAudio();
+        });
+
+        this._ttsSocketTask.onError((e) => {
+            console.error('TTS: WebSocket连接错误', e);
+            wx.showToast({ title: '语音连接失败', icon: 'none' });
+        });
+    },
+
+    // 停止TTS
+    stopTTS() {
+        if (this._ttsSocketTask) {
+            this._ttsSocketTask.close();
+            this._ttsSocketTask = null;
+        }
+        if (this._audioCtx) {
+            this._audioCtx.stop();
+        }
+    },
+
+    // 播放收集到的音频数据
+    playCollectedAudio() {
+        if (this._ttsAudioBuffers.length === 0) {
+            console.log('TTS: 没有收到音频数据');
+            return;
+        }
+
+        console.log('TTS: 合并音频数据，共', this._ttsAudioBuffers.length, '个片段');
+
+        // 计算总长度
+        let totalLength = 0;
+        for (const buffer of this._ttsAudioBuffers) {
+            totalLength += buffer.byteLength;
+        }
+
+        // 合并所有PCM数据
+        const pcmData = new ArrayBuffer(totalLength);
+        const pcmView = new Uint8Array(pcmData);
+        let offset = 0;
+        for (const buffer of this._ttsAudioBuffers) {
+            pcmView.set(new Uint8Array(buffer), offset);
+            offset += buffer.byteLength;
+        }
+
+        console.log('TTS: PCM数据总长度:', totalLength, 'bytes');
+
+        // 转换为WAV格式
+        const wavData = pcmToWav(pcmData, 16000, 1);
+
+        // 保存到临时文件并播放
+        const fs = wx.getFileSystemManager();
+        const tempFilePath = `${wx.env.USER_DATA_PATH}/tts_${Date.now()}.wav`;
+
+        fs.writeFile({
+            filePath: tempFilePath,
+            data: wavData,
+            encoding: 'binary',
+            success: () => {
+                console.log('TTS: WAV文件保存成功:', tempFilePath);
+
+                if (this._audioCtx) {
+                    this._audioCtx.destroy();
+                }
+                this._audioCtx = wx.createInnerAudioContext();
+                this._audioCtx.src = tempFilePath;
+
+                this._audioCtx.onError((err) => {
+                    console.error('TTS: 音频播放错误:', err);
+                });
+
+                this._audioCtx.onEnded(() => {
+                    console.log('TTS: 播放完成');
+                    // 清理临时文件
+                    fs.unlink({
+                        filePath: tempFilePath,
+                        fail: () => { } // 忽略删除失败
+                    });
+                });
+
+                this._audioCtx.play();
+            },
+            fail: (err) => {
+                console.error('TTS: 保存WAV文件失败:', err);
+                wx.showToast({ title: '音频保存失败', icon: 'none' });
+            }
+        });
+
+        // 清空缓冲区
+        this._ttsAudioBuffers = [];
     },
 
     playSound() {
@@ -642,6 +728,7 @@ Page({
             clearInterval(this.data.challenge.timerInterval);
         }
         this.stopRecord();
+        this.stopTTS();
         if (this.socketTask) {
             this.socketTask.close();
         }

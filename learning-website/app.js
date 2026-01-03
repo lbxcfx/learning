@@ -1799,16 +1799,146 @@ handleWrongAnswer = function (item) {
 };
 
 // ==================== 增强音频发音功能 ====================
-// 使用多种TTS API提供更好的发音体验
-async function playWordSound(word) {
-  // 首先尝试使用浏览器自带的语音合成
+// 使用云知声TTS API提供更好的发音体验
+// 配置使用与语音评测相同的密钥
+
+// TTS配置 - 使用与YS_CONFIG相同的密钥
+const TTS_CONFIG = {
+  APP_KEY: YS_CONFIG.APP_KEY,
+  SECRET: YS_CONFIG.SECRET,
+  WS_URL: "wss://ws-stts.hivoice.cn/v1/tts"
+};
+
+// TTS播放器实例
+let ttsPlayer = null;
+let ttsWs = null;
+let ttsPendingText = null;
+let ttsIsPlaying = false;
+
+// 停止TTS播放
+function stopTTS() {
+  ttsIsPlaying = false;
+  if (ttsPlayer) {
+    ttsPlayer.destroy();
+    ttsPlayer = null;
+  }
+  if (ttsWs) {
+    ttsWs.close();
+    ttsWs = null;
+  }
+}
+
+// 使用云知声TTS播放文本
+function playTTS(text, voiceCode = 'jenny-plus') {
+  // 停止之前的播放
+  stopTTS();
+
+  if (!text || text.trim().length === 0) {
+    console.log('TTS: 空文本，跳过播放');
+    return;
+  }
+
+  ttsIsPlaying = true;
+
+  // 生成签名
+  const tm = +new Date();
+  const signStr = `${TTS_CONFIG.APP_KEY}${tm}${TTS_CONFIG.SECRET}`;
+  const sign = CryptoJS.SHA256(signStr).toString().toUpperCase();
+
+  // 创建WebSocket连接
+  const wsUrl = `${TTS_CONFIG.WS_URL}?appkey=${TTS_CONFIG.APP_KEY}&time=${tm}&sign=${sign}`;
+
+  console.log('TTS: 正在连接云知声TTS服务...');
+
+  try {
+    ttsWs = new WebSocket(wsUrl);
+    ttsWs.binaryType = 'arraybuffer';
+
+    // 创建PCM播放器
+    ttsPlayer = new PCMPlayer({
+      inputCodec: 'Int16',
+      channels: 1,
+      sampleRate: 16000,
+      flushTime: 100,
+    });
+    ttsPlayer.inputFininshed = false;
+    ttsPlayer.onEnded = () => {
+      stopTTS();
+    };
+
+    ttsWs.onopen = () => {
+      console.log('TTS: WebSocket连接成功，发送合成请求...');
+      // 发送TTS请求
+      ttsWs.send(JSON.stringify({
+        format: 'pcm',
+        vcn: voiceCode,      // jenny-plus 美音
+        text: text,
+        sample: 16000,
+        speed: 40,           // 语速稍慢，适合学习
+        volume: 50,
+        pitch: 50,
+        bright: 50,
+      }));
+    };
+
+    ttsWs.onmessage = (res) => {
+      try {
+        // 尝试解析为JSON（错误响应）
+        const result = JSON.parse(res.data);
+        if (result.code !== 0) {
+          console.error('TTS错误:', result);
+          // 如果云知声TTS失败，回退到浏览器语音合成
+          fallbackToSpeechSynthesis(text);
+        }
+        ttsWs.close();
+      } catch (e) {
+        // 二进制音频数据
+        if (ttsPlayer) {
+          ttsPlayer.feed(res.data);
+        }
+      }
+    };
+
+    ttsWs.onclose = (e) => {
+      console.log('TTS: WebSocket连接关闭');
+      if (ttsPlayer) {
+        ttsPlayer.inputFininshed = true;
+      }
+      ttsWs = null;
+    };
+
+    ttsWs.onerror = (e) => {
+      console.error('TTS: WebSocket连接错误', e);
+      // 回退到浏览器语音合成
+      fallbackToSpeechSynthesis(text);
+      stopTTS();
+    };
+
+  } catch (err) {
+    console.error('TTS: 初始化失败', err);
+    // 回退到浏览器语音合成
+    fallbackToSpeechSynthesis(text);
+  }
+
+  // 添加视觉反馈
+  const soundBtns = document.querySelectorAll('.sound-btn');
+  soundBtns.forEach(btn => {
+    btn.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+      btn.style.transform = 'scale(1)';
+    }, 200);
+  });
+}
+
+// 回退到浏览器自带语音合成
+function fallbackToSpeechSynthesis(text) {
+  console.log('TTS: 使用浏览器语音合成作为备选...');
   if ('speechSynthesis' in window) {
-    // 取消正在播放的语音
     speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(word);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
-    utterance.rate = 0.8; // 稍慢一点，适合学习
+    utterance.rate = 0.8;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
@@ -1823,30 +1953,17 @@ async function playWordSound(word) {
     }
 
     speechSynthesis.speak(utterance);
-
-    // 添加视觉反馈
-    const soundBtns = document.querySelectorAll('.sound-btn');
-    soundBtns.forEach(btn => {
-      btn.style.transform = 'scale(1.2)';
-      setTimeout(() => {
-        btn.style.transform = 'scale(1)';
-      }, 200);
-    });
   }
+}
+
+// 播放单词
+async function playWordSound(word) {
+  playTTS(word, 'jenny-plus');
 }
 
 // 播放句子
 function playSentenceSound(sentence) {
-  if ('speechSynthesis' in window) {
-    speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(sentence);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.75; // 句子读慢一点
-    utterance.pitch = 1.0;
-
-    speechSynthesis.speak(utterance);
-  }
+  playTTS(sentence, 'jenny-plus');
 }
 
 // 确保voices已加载

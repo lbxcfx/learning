@@ -1,0 +1,68 @@
+{
+  "string": [
+    {
+      "name": "empty_message",
+      "value": "空空如也，点击重试~"
+    },
+    {
+      "name": "pull_to_refresh",
+      "value": "上拉刷新"
+    },
+    {
+      "name": "loading_success",
+      "value": "加载成功"
+    },
+    {
+      "name": "loading_error",
+      "value": "加载失败"
+    },
+    {
+      "name": "loading",
+      "value": "加载中"
+    },
+    {
+      "name": "network_error",
+      "value": "网络异常，请重试~"
+    },
+    {
+      "name": "cancel",
+      "value": "取消"
+    },
+    {
+      "name": "sure",
+      "value": "确定"
+    },
+    {
+      "name": "version_title",
+      "value": "发现新版本（v%s）"
+    },
+    {
+      "name": "version_content",
+      "value": "%s\n\n请前往华为应用市场更新"
+    },
+    {
+      "name": "privacy_title",
+      "value": "用户协议及隐私政策"
+    },
+    {
+      "name": "privacy_",
+      "value": "《隐私政策》"
+    },
+    {
+      "name": "agreement_",
+      "value": "《用户协议》"
+    },
+    {
+      "name": "privacy_content1",
+      "value": "感谢您信任并使用%s！\n\n我们非常重视您的个人信息和隐私保护，为了更好的保障您的个人权益，在您使用我们的产品前，请您认真阅读"
+    },
+    {
+      "name": "privacy_next",
+      "value": "同意并继续"
+    },
+    {
+      "name": "privacy_content2",
+      "value": "的全部内容，同意并接受全部条款后开始使用我们的产品和服务。\n\n1、您在使用应用各项产品或服务时，将会提供与具体功能相关的个人信息（粘贴板信息、头像、昵称）的行为\n\n2、您可以随时查询、更正、删除您的个人信息，我们也提供账户注销的渠道\n\n3、未经您的再次同意，我们不会将上述信息用于您未授权的其他用途或目的。"
+    }
+  ]
+}

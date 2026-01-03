@@ -1,0 +1,13 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "common": "../common",
+    "unishorttextspeechlibrary": "file:libs/UniShortTextSpeechLibrary.har",
+    "@pura/harmony-utils": "^1.2.1"
+  }
+}

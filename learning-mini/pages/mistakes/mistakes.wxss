@@ -24,57 +24,105 @@
 
 .mistake-item {
   background: white;
-  border-radius: 24rpx;
-  padding: 30rpx;
+  border-radius: 32rpx;
+  padding: 32rpx;
   margin-bottom: 24rpx;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 左侧装饰条 */
+.mistake-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8rpx;
+  background-color: var(--warning);
 }
 
 .word-info {
+  flex: 1;
+  min-width: 0; /* Critical for text truncation in flex items */
+  margin-right: 24rpx;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
 }
 
 .english {
-  font-size: 36rpx;
-  font-weight: 700;
+  font-size: 40rpx;
+  font-weight: 800;
   color: var(--text-primary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .soundmark {
   font-size: 26rpx;
   color: var(--text-muted);
+  font-family: monospace;
+  margin-top: 4rpx;
 }
 
 .chinese {
   font-size: 30rpx;
   color: var(--text-secondary);
+  margin-top: 12rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .actions {
   display: flex;
+  align-items: center;
   gap: 20rpx;
+  flex-shrink: 0; /* Prevent actions from being squeezed */
 }
 
 .icon-btn {
-  width: 80rpx;
-  height: 80rpx;
+  width: 88rpx !important;
+  min-width: 88rpx !important; /* Force fixed width */
+  height: 88rpx !important;
+  flex: 0 0 88rpx; /* Flexbox rigid sizing */
   border-radius: 50%;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
+  font-size: 36rpx;
   background: var(--bg-light);
+  border: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.05);
+  margin: 0; /* Reset browser default */
+}
+
+/* Fix for button default styles in mini program */
+.icon-btn::after {
   border: none;
 }
 
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+/* Play button specific style */
+.icon-btn:not(.delete) {
+  background-color: #f0fdf4; 
+  color: #16a34a;
+}
+
+/* Delete button specific style */
 .icon-btn.delete {
   background: #fef2f2;
+  color: #ef4444;
 }
 
 .empty-state {
@@ -82,24 +130,27 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-top: 100rpx;
+  margin-top: 120rpx;
   gap: 30rpx;
 }
 
 .empty-icon {
-  font-size: 120rpx;
+  font-size: 140rpx;
+  margin-bottom: 20rpx;
 }
 
 .empty-text {
   color: var(--text-secondary);
-  font-size: 32rpx;
+  font-size: 34rpx;
+  font-weight: 500;
 }
 
 .btn-primary {
   background: var(--primary);
   color: white;
-  padding: 20rpx 60rpx;
-  border-radius: 50rpx;
+  padding: 24rpx 80rpx;
+  border-radius: 60rpx;
   font-weight: 600;
-  margin-top: 30rpx;
+  margin-top: 40rpx;
+  box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.4);
 }

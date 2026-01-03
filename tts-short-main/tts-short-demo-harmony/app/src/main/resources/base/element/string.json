@@ -1,0 +1,48 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "短文本语音合成"
+    },
+    {
+      "name": "dependency_internet_reason",
+      "value": "获取网络数据"
+    },
+    {
+      "name": "dependency_internet_info_reason",
+      "value": "获取网络状态"
+    },
+    {
+      "name": "home_title",
+      "value": "云知声短文本语音合成"
+    },
+    {
+      "name": "speech_input_default_placeholder",
+      "value": "请输入100字符内的文本"
+    },
+    {
+      "name": "appKey_input_default_placeholder",
+      "value": "请输入申请的AppKey"
+    },
+    {
+      "name": "appSecret_input_default_placeholder",
+      "value": "请输入申请的AppSecret"
+    },
+    {
+      "name": "webSocket_input_default_placeholder",
+      "value": "请输入WebSocket地址"
+    },
+    {
+      "name": "download_input_default_placeholder",
+      "value": "请输入下载地址"
+    }
+  ]
+}

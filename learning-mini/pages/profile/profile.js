@@ -186,14 +186,20 @@ Page({
     handleLogout() {
         wx.showModal({
             title: '确认退出',
-            content: '退出登录后学习数据仍会保留',
+            content: '确定要退出登录吗？',
             success: (res) => {
                 if (res.confirm) {
-                    app.globalData.userInfo = null;
-                    app.globalData.isLoggedIn = false;
-                    wx.removeStorageSync('userInfo');
+                    // 调用全局退出方法，清理数据
+                    app.logout();
 
-                    this.setData({ userInfo: null });
+                    // 更新当前页面显示
+                    this.setData({
+                        userInfo: null,
+                        score: 0,
+                        coins: 0,
+                        learnedCount: 0,
+                        mistakesCount: 0
+                    });
 
                     wx.showToast({
                         title: '已退出登录',

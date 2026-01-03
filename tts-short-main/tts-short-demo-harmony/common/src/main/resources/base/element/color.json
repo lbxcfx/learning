@@ -1,0 +1,88 @@
+{
+  "color": [
+    {
+      "name": "white",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "window_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "window_background_",
+      "value": "#F1F2F3"
+    },
+    {
+      "name": "window_background__",
+      "value": "#EEEFF0"
+    },
+    {
+      "name": "line",
+      "value": "#DDDEDF"
+    },
+    {
+      "name": "transparent",
+      "value": "#00000000"
+    },
+    {
+      "name": "transparent_white_80",
+      "value": "#80FFFFFF"
+    },
+    {
+      "name": "black",
+      "value": "#000000"
+    },
+    {
+      "name": "transparent_dark_80",
+      "value": "#80000000"
+    },
+    {
+      "name": "accent",
+      "value": "#FF0036"
+    },
+    {
+      "name": "font_black",
+      "value": "#000000"
+    },
+    {
+      "name": "font_dark",
+      "value": "#222222"
+    },
+    {
+      "name": "dark2",
+      "value": "#222222"
+    },
+    {
+      "name": "dark3",
+      "value": "#333333"
+    },
+    {
+      "name": "font_gray",
+      "value": "#666666"
+    },
+    {
+      "name": "font_hint",
+      "value": "#999999"
+    },
+    {
+      "name": "font_red",
+      "value": "#FF0036"
+    },
+    {
+      "name": "font_white",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "link",
+      "value": "#12B7F5"
+    },
+    {
+      "name": "gold",
+      "value": "#F5D149"
+    },
+    {
+      "name": "default_loading_progress",
+      "value": "#666666"
+    }
+  ]
+}

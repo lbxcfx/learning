@@ -102,9 +102,17 @@ App({
                     // 保存合并后的数据到本地
                     this.saveLearningData();
                 } else {
-                    // 新用户，上传初始数据
-                    console.log('🆕 New user detected, creating cloud record...');
-                    this.updateCloudData();
+                    // 新用户，重置本地旧数据并上传初始数据
+                    console.log('🆕 New user detected, resetting local data and creating cloud record...');
+                    this.globalData.score = 0;
+                    this.globalData.coins = 0;
+                    this.globalData.streak = 1;
+                    this.globalData.learnedWords = [];
+                    this.globalData.mistakes = []; // new user has no mistakes
+                    this.saveLearningData(); // 清空本地缓存
+
+                    // 立即上传新用户数据，无需防抖，确保排行榜能立刻获取
+                    this._syncToCloudNow();
                 }
             }
         });
@@ -137,9 +145,30 @@ App({
         this.updateCloudData();
     },
 
-    // 更新云端数据
+    onHide() {
+        // App backgrounding: Force sync immediately if pending
+        if (this.cloudTimer) {
+            clearTimeout(this.cloudTimer);
+            this._syncToCloudNow();
+        }
+    },
+
+    // 更新云端数据 (防抖处理：2秒内无变化才上传)
     updateCloudData() {
-        console.log('🚀 updateCloudData called');
+        if (this.cloudTimer) {
+            clearTimeout(this.cloudTimer);
+        }
+
+        this.cloudTimer = setTimeout(() => {
+            this._syncToCloudNow();
+        }, 2000);
+    },
+
+    // 立即执行云端同步
+    _syncToCloudNow() {
+        this.cloudTimer = null; // reset timer
+        console.log('🚀 syncToCloudNow execution...');
+
         if (!wx.cloud) {
             console.warn('⚠️ Cloud update skipped: wx.cloud not available');
             return;
@@ -155,6 +184,7 @@ App({
         let dataToUpdate = {
             score: this.globalData.score,
             coins: this.globalData.coins,
+            streak: this.globalData.streak || 1,
             mistakes: this.globalData.mistakes,
             learnedWords: this.globalData.learnedWords,
             updateTime: new Date()
@@ -169,7 +199,6 @@ App({
         console.log('📤 Uploading data:', dataToUpdate);
 
         // 查找并更新，如果不存在则创建
-        // 由于没有 docId，先查询 (实际生产建议保存 docId 到 globalData)
         this.usersCollection.where({
             _openid: this.globalData.openid
         }).get({
@@ -182,10 +211,6 @@ App({
                         fail: err => console.error('❌ Sync to Cloud Failed (Update)', err)
                     });
                 } else {
-                    // For create, we don't need _.set
-                    // We need to revert the .set() wrapper for add() because add() doesn't support command operators like .set() usually?
-                    // actually add() takes raw data.
-                    // Let's reconstruct raw data for add
                     const rawData = { ...dataToUpdate };
                     if (this.globalData.userInfo) {
                         rawData.userInfo = this.globalData.userInfo;
@@ -227,5 +252,33 @@ App({
         } else {
             console.log('📝 Mistake already exists, skipping.');
         }
+    },
+
+    // 退出登录，清理所有数据
+    logout() {
+        console.log('👋 Logging out, clearing all user data...');
+
+        // 1. 重置全局数据
+        this.globalData.userInfo = null;
+        this.globalData.isLoggedIn = false;
+        // 注意：openid 一般保留，因为它是社保设备/微信号维度的，不是账号维度的，
+        // 但如果业务要求像"切换账号"那样彻底，也可以清空。不过小程序一般openid不变。
+        // 这里主要清空业务数据。
+
+        this.globalData.score = 0;
+        this.globalData.coins = 0;
+        this.globalData.streak = 1;
+        this.globalData.learnedWords = [];
+        this.globalData.mistakes = [];
+
+        // 2. 清除云端防抖定时器
+        if (this.cloudTimer) {
+            clearTimeout(this.cloudTimer);
+            this.cloudTimer = null;
+        }
+
+        // 3. 清理本地缓存
+        wx.removeStorageSync('userInfo');
+        wx.removeStorageSync('learningData');
     }
 });
